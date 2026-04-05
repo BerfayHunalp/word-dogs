@@ -554,6 +554,226 @@ html, body {
     color: var(--accent);
 }
 
+/* ========== AUTH SCREEN ========== */
+#auth-screen {
+    background: var(--bg-dark);
+    background-image: radial-gradient(ellipse at 50% 30%, #1a1a2e 0%, var(--bg-dark) 70%);
+}
+
+.auth-content {
+    text-align: center;
+    width: 100%;
+    max-width: 360px;
+    padding: 20px;
+}
+
+.auth-title {
+    font-family: 'Russo One', sans-serif;
+    font-size: 2.5rem;
+    color: var(--accent);
+    letter-spacing: 0.15em;
+    text-shadow: 0 0 30px var(--accent-glow);
+    margin-bottom: 30px;
+}
+
+.auth-form {
+    background: var(--bg-card);
+    border: 1px solid #1e293b;
+    border-radius: 16px;
+    padding: 25px;
+    margin-bottom: 15px;
+}
+
+.auth-form-title {
+    font-family: 'Russo One', sans-serif;
+    font-size: 1.2rem;
+    color: var(--text);
+    margin-bottom: 20px;
+}
+
+.auth-form input {
+    display: block;
+    width: 100%;
+    padding: 12px 16px;
+    margin-bottom: 12px;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.95rem;
+    color: var(--text);
+    background: var(--bg-dark);
+    border: 2px solid var(--letter-border);
+    border-radius: 10px;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.auth-form input:focus {
+    border-color: var(--accent);
+}
+
+.auth-form input::placeholder {
+    color: var(--text-dim);
+}
+
+.auth-error {
+    color: var(--danger);
+    font-size: 0.85rem;
+    min-height: 1.2em;
+    margin-bottom: 10px;
+}
+
+.auth-switch {
+    margin-top: 15px;
+    font-size: 0.85rem;
+    color: var(--text-dim);
+}
+
+.auth-switch a {
+    color: var(--accent);
+    text-decoration: none;
+    font-weight: 600;
+}
+
+.auth-switch a:hover {
+    text-decoration: underline;
+}
+
+#skip-auth-btn {
+    margin-top: 10px;
+}
+
+/* ========== USER BADGE ========== */
+.user-badge {
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    font-size: 0.9rem;
+}
+
+.user-badge span {
+    color: var(--accent);
+    font-weight: 700;
+}
+
+.user-badge a {
+    color: var(--text-dim);
+    text-decoration: none;
+    font-size: 0.8rem;
+}
+
+.user-badge a:hover {
+    color: var(--danger);
+}
+
+/* ========== PROFILE SCREEN ========== */
+#profile-screen {
+    background: var(--bg-dark);
+    background-image: radial-gradient(ellipse at 50% 30%, #1a1a2e 0%, var(--bg-dark) 70%);
+    overflow-y: auto;
+}
+
+.profile-content {
+    text-align: center;
+    width: 100%;
+    max-width: 400px;
+    padding: 30px 20px;
+}
+
+.profile-title {
+    font-family: 'Russo One', sans-serif;
+    font-size: 1.8rem;
+    color: var(--accent);
+    margin-bottom: 5px;
+}
+
+.profile-username {
+    color: var(--text-dim);
+    font-size: 1rem;
+    margin-bottom: 25px;
+}
+
+.profile-stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 15px;
+    margin-bottom: 30px;
+}
+
+.profile-section-title {
+    font-family: 'Russo One', sans-serif;
+    font-size: 1rem;
+    color: var(--text);
+    margin-bottom: 15px;
+    text-align: left;
+}
+
+.profile-history {
+    margin-bottom: 25px;
+}
+
+.history-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 14px;
+    background: var(--bg-card);
+    border: 1px solid #1e293b;
+    border-radius: 10px;
+    margin-bottom: 8px;
+    font-size: 0.85rem;
+}
+
+.history-item .history-score {
+    font-family: 'Russo One', sans-serif;
+    font-size: 1.1rem;
+    color: var(--accent);
+}
+
+.history-item .history-date {
+    color: var(--text-dim);
+    font-size: 0.75rem;
+}
+
+.history-item .history-words {
+    color: var(--text-dim);
+}
+
+#profile-back-btn {
+    margin-top: 10px;
+}
+
+/* ========== SPLASH PARTICLES (letter landing) ========== */
+#splash-particles {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 40;
+    overflow: visible;
+}
+
+.splash-particle {
+    position: absolute;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    opacity: 0.9;
+    animation: splash-fly 0.6s ease-out forwards;
+    pointer-events: none;
+}
+
+@keyframes splash-fly {
+    0% {
+        transform: translate(0, 0) scale(1);
+        opacity: 0.9;
+    }
+    100% {
+        transform: translate(var(--dx), var(--dy)) scale(0);
+        opacity: 0;
+    }
+}
+
 /* ========== RESPONSIVE ========== */
 @media (max-width: 400px) {
     .splash-title, .menu-title {

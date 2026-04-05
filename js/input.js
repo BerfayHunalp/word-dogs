@@ -1,10 +1,14 @@
 import { isAdjacent, getGridElement } from './bucket.js';
 import { isValidPrefix } from './dictionary.js';
 
-let selectedPath = []; // array of { row, col, letter, element }
+let selectedPath = [];
 let isSelecting = false;
 let onSelectionComplete = null;
 let wordDisplay = null;
+
+// Cache letter element positions for precision hit-testing
+let letterPositionCache = [];
+let cacheValid = false;
 
 export function initInput(callback) {
     onSelectionComplete = callback;
@@ -30,8 +34,61 @@ export function destroyInput() {
     document.removeEventListener('mouseup', onMouseUp);
 }
 
+// Rebuild position cache for all visible grid letters
+export function invalidatePositionCache() {
+    cacheValid = false;
+}
+
+function rebuildCache() {
+    letterPositionCache = [];
+    const letters = document.querySelectorAll('.grid-letter[data-row]');
+    letters.forEach(el => {
+        if (el.style.visibility === 'hidden') return;
+        const rect = el.getBoundingClientRect();
+        letterPositionCache.push({
+            element: el,
+            row: parseInt(el.dataset.row),
+            col: parseInt(el.dataset.col),
+            letter: el.dataset.letter,
+            cx: rect.left + rect.width / 2,
+            cy: rect.top + rect.height / 2,
+            halfW: rect.width / 2,
+            halfH: rect.height / 2,
+            // Expanded hit area (20% larger) for easier targeting
+            hitRadius: Math.max(rect.width, rect.height) * 0.6
+        });
+    });
+    cacheValid = true;
+}
+
+// Find closest letter to mouse position using cached rects
+// More precise than elementFromPoint — uses center distance + expanded hit area
+function findLetterAtPoint(x, y) {
+    if (!cacheValid) rebuildCache();
+
+    let closest = null;
+    let closestDist = Infinity;
+
+    for (const entry of letterPositionCache) {
+        const dx = x - entry.cx;
+        const dy = y - entry.cy;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        // Must be within expanded hit radius
+        if (dist <= entry.hitRadius && dist < closestDist) {
+            closestDist = dist;
+            closest = entry;
+        }
+    }
+
+    return closest;
+}
+
 function onMouseDown(e) {
-    const cell = getCellFromEvent(e);
+    // Rebuild cache on each selection start (letters may have changed)
+    rebuildCache();
+
+    const cell = findLetterAtPoint(e.clientX, e.clientY);
     if (!cell) return;
 
     e.preventDefault();
@@ -45,20 +102,19 @@ function onMouseMove(e) {
     if (!isSelecting) return;
     e.preventDefault();
 
-    const el = document.elementFromPoint(e.clientX, e.clientY);
-    if (!el) return;
-
-    const cell = getCellFromElement(el);
+    const cell = findLetterAtPoint(e.clientX, e.clientY);
     if (!cell) return;
 
     const last = selectedPath[selectedPath.length - 1];
     if (!last) return;
 
+    // Same cell as current last — ignore
+    if (last.row === cell.row && last.col === cell.col) return;
+
     // Check if backtracking (hovering over second-to-last)
     if (selectedPath.length >= 2) {
         const prev = selectedPath[selectedPath.length - 2];
         if (prev.row === cell.row && prev.col === cell.col) {
-            // Backtrack: remove last from path
             const removed = selectedPath.pop();
             removed.element.classList.remove('selected');
             updateDisplay();
@@ -106,7 +162,6 @@ function updateDisplay() {
     const word = selectedPath.map(p => p.letter).join('');
     wordDisplay.textContent = word;
 
-    // Prefix validation feedback
     wordDisplay.classList.remove('valid-prefix', 'invalid-prefix');
     if (word.length >= 2) {
         if (isValidPrefix(word)) {
@@ -115,25 +170,6 @@ function updateDisplay() {
             wordDisplay.classList.add('invalid-prefix');
         }
     }
-}
-
-function getCellFromEvent(e) {
-    const target = e.target.closest('.grid-letter');
-    if (!target || target.style.visibility === 'hidden') return null;
-    return getCellFromElement(target);
-}
-
-function getCellFromElement(el) {
-    const target = el.closest ? el.closest('.grid-letter') : null;
-    if (!target || target.style.visibility === 'hidden') return null;
-    if (!target.dataset.row || !target.dataset.col) return null;
-
-    return {
-        row: parseInt(target.dataset.row),
-        col: parseInt(target.dataset.col),
-        letter: target.dataset.letter,
-        element: target
-    };
 }
 
 export function clearSelection() {

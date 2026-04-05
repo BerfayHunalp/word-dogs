@@ -1,4 +1,5 @@
 import { createGridLetterElement } from './letter.js';
+import { invalidatePositionCache } from './input.js';
 
 const COLUMNS = 6;
 const MAX_ROWS = 8;
@@ -69,6 +70,10 @@ export function addLetter(letter, preferredCol) {
 
     // Render
     renderGrid();
+
+    // Spawn splash particles on landing
+    requestAnimationFrame(() => spawnSplashParticles(el));
+
     return true;
 }
 
@@ -137,6 +142,9 @@ function renderGrid() {
     } else {
         bucket.classList.remove('danger');
     }
+
+    // Invalidate input position cache after DOM changes
+    invalidatePositionCache();
 }
 
 // Get cell at row, col
@@ -229,4 +237,42 @@ export function getAllCells() {
 // Get grid element for position calculations
 export function getGridElement() {
     return gridEl;
+}
+
+// Splash particles when a letter lands in the bucket
+function spawnSplashParticles(letterEl) {
+    const container = document.getElementById('splash-particles');
+    if (!container) return;
+
+    const rect = letterEl.getBoundingClientRect();
+    const containerRect = container.getBoundingClientRect();
+    const cx = rect.left - containerRect.left + rect.width / 2;
+    const cy = rect.top - containerRect.top;
+
+    const count = 6 + Math.floor(Math.random() * 4); // 6-9 particles
+    const colors = ['#f59e0b', '#fbbf24', '#d97706', '#e2e8f0', '#94a3b8'];
+
+    for (let i = 0; i < count; i++) {
+        const particle = document.createElement('div');
+        particle.classList.add('splash-particle');
+
+        // Random direction — slight upward bias to spill over bucket rim
+        const angle = -Math.PI * 0.2 + Math.random() * -Math.PI * 0.6; // upward arc
+        const speed = 20 + Math.random() * 40;
+        const dx = Math.cos(angle) * speed * (Math.random() > 0.5 ? 1 : -1);
+        const dy = Math.sin(angle) * speed;
+
+        particle.style.left = `${cx}px`;
+        particle.style.top = `${cy}px`;
+        particle.style.setProperty('--dx', `${dx}px`);
+        particle.style.setProperty('--dy', `${dy}px`);
+        particle.style.background = colors[Math.floor(Math.random() * colors.length)];
+        particle.style.width = `${3 + Math.random() * 5}px`;
+        particle.style.height = particle.style.width;
+
+        container.appendChild(particle);
+
+        // Cleanup after animation
+        setTimeout(() => particle.remove(), 600);
+    }
 }

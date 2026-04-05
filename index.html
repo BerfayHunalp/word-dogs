@@ -20,16 +20,76 @@
         </div>
     </div>
 
+    <!-- Auth Screen -->
+    <div id="auth-screen" class="screen">
+        <div class="auth-content">
+            <h1 class="auth-title">WARDOGS</h1>
+
+            <!-- Login Form -->
+            <form id="login-form" class="auth-form">
+                <h2 class="auth-form-title">Connexion</h2>
+                <input type="email" id="login-email" placeholder="Email" required autocomplete="email">
+                <input type="password" id="login-password" placeholder="Mot de passe" required autocomplete="current-password">
+                <div id="login-error" class="auth-error"></div>
+                <button type="submit" class="btn-primary">SE CONNECTER</button>
+                <p class="auth-switch">Pas de compte ? <a href="#" id="show-signup">Créer un compte</a></p>
+            </form>
+
+            <!-- Signup Form -->
+            <form id="signup-form" class="auth-form" style="display:none">
+                <h2 class="auth-form-title">Inscription</h2>
+                <input type="text" id="signup-username" placeholder="Nom d'utilisateur" required minlength="3" maxlength="20" autocomplete="username">
+                <input type="email" id="signup-email" placeholder="Email" required autocomplete="email">
+                <input type="password" id="signup-password" placeholder="Mot de passe (6+ caractères)" required minlength="6" autocomplete="new-password">
+                <div id="signup-error" class="auth-error"></div>
+                <button type="submit" class="btn-primary">S'INSCRIRE</button>
+                <p class="auth-switch">Déjà un compte ? <a href="#" id="show-login">Se connecter</a></p>
+            </form>
+
+            <button id="skip-auth-btn" class="btn-secondary">Jouer sans compte</button>
+        </div>
+    </div>
+
     <!-- Menu Screen -->
     <div id="menu-screen" class="screen">
         <div class="menu-content">
             <h1 class="menu-title">WARDOGS</h1>
             <p class="menu-subtitle">Forge des mots. Domine le seau.</p>
+            <div id="user-badge" class="user-badge" style="display:none">
+                <span id="user-badge-name"></span>
+                <a href="#" id="logout-link">Déconnexion</a>
+            </div>
             <button id="start-btn" class="btn-primary">JOUER</button>
+            <button id="profile-btn" class="btn-secondary" style="display:none">MON PROFIL</button>
             <div class="high-score-display">
                 <span>Meilleur score</span>
                 <span id="menu-high-score">0</span>
             </div>
+        </div>
+    </div>
+
+    <!-- Profile Screen -->
+    <div id="profile-screen" class="screen">
+        <div class="profile-content">
+            <h2 class="profile-title">Mon Profil</h2>
+            <div class="profile-username" id="profile-username"></div>
+            <div class="profile-stats">
+                <div class="stat">
+                    <span class="stat-label">Meilleur Score</span>
+                    <span id="profile-best-score" class="stat-value">0</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Parties Jouées</span>
+                    <span id="profile-total-games" class="stat-value">0</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Mots Trouvés</span>
+                    <span id="profile-total-words" class="stat-value">0</span>
+                </div>
+            </div>
+            <h3 class="profile-section-title">Historique</h3>
+            <div id="profile-history" class="profile-history"></div>
+            <button id="profile-back-btn" class="btn-secondary">RETOUR</button>
         </div>
     </div>
 
@@ -63,6 +123,9 @@
                     <div id="letter-grid"></div>
                 </div>
             </div>
+
+            <!-- Splash particles container -->
+            <div id="splash-particles"></div>
 
             <!-- Float Scores Container -->
             <div id="float-scores"></div>

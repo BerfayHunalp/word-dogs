@@ -1,0 +1,8 @@
+name = "wardogs-api"
+main = "src/index.js"
+compatibility_date = "2024-12-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "wardogs-db"
+database_id = "" # Fill after: npx wrangler d1 create wardogs-db

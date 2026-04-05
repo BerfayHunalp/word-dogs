@@ -1,4 +1,4 @@
-const DICT_URL = 'https://raw.githubusercontent.com/words/an-array-of-french-words/master/index.json';
+const DICT_URL = './data/words.json';
 
 let wordSet = null;
 let prefixSet2 = null;
