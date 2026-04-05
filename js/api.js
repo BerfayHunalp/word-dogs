@@ -1,5 +1,5 @@
 // API client for Wardogs backend
-const API_BASE = ''; // Will be set to worker URL when deployed
+const API_BASE = 'https://wardogs-api.apexdiligence.workers.dev';
 
 let authToken = null;
 let currentUser = null;
