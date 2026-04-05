@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Wardogs</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Russo+One&family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- Splash Screen -->
+    <div id="splash-screen" class="screen active">
+        <div class="splash-content">
+            <img id="splash-logo" src="assets/logo.png" alt="Wardogs" onerror="this.style.display='none'">
+            <h1 class="splash-title">WARDOGS</h1>
+            <div class="splash-loader">
+                <div class="loader-bar"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Menu Screen -->
+    <div id="menu-screen" class="screen">
+        <div class="menu-content">
+            <h1 class="menu-title">WARDOGS</h1>
+            <p class="menu-subtitle">Forge des mots. Domine le seau.</p>
+            <button id="start-btn" class="btn-primary">JOUER</button>
+            <div class="high-score-display">
+                <span>Meilleur score</span>
+                <span id="menu-high-score">0</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Game Screen -->
+    <div id="game-screen" class="screen">
+        <div id="game-container">
+            <!-- Score Bar -->
+            <div id="score-bar">
+                <div class="score-left">
+                    <span class="score-label">SCORE</span>
+                    <span id="current-score">0</span>
+                </div>
+                <div class="score-center">
+                    <span id="current-word-display"></span>
+                </div>
+                <div class="score-right">
+                    <span class="score-label">NIVEAU</span>
+                    <span id="current-level">1</span>
+                </div>
+            </div>
+
+            <!-- Fall Zone -->
+            <div id="fall-zone"></div>
+
+            <!-- 3D Bucket -->
+            <div id="bucket-wrapper">
+                <div id="bucket">
+                    <div id="bucket-wall-left" class="bucket-wall"></div>
+                    <div id="bucket-wall-right" class="bucket-wall"></div>
+                    <div id="bucket-floor"></div>
+                    <div id="letter-grid"></div>
+                </div>
+            </div>
+
+            <!-- Float Scores Container -->
+            <div id="float-scores"></div>
+        </div>
+    </div>
+
+    <!-- Game Over Screen -->
+    <div id="gameover-screen" class="screen">
+        <div class="gameover-content">
+            <h1 class="gameover-title">GAME OVER</h1>
+            <div class="gameover-stats">
+                <div class="stat">
+                    <span class="stat-label">Score</span>
+                    <span id="final-score" class="stat-value">0</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Meilleur</span>
+                    <span id="final-high-score" class="stat-value">0</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Mots</span>
+                    <span id="final-words" class="stat-value">0</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Meilleur mot</span>
+                    <span id="final-best-word" class="stat-value">-</span>
+                </div>
+            </div>
+            <button id="retry-btn" class="btn-primary">REJOUER</button>
+            <button id="menu-btn" class="btn-secondary">MENU</button>
+        </div>
+    </div>
+
+    <script type="module" src="js/main.js"></script>
+</body>
+</html>
