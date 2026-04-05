@@ -278,17 +278,18 @@ html, body {
 
 .falling-letter {
     position: absolute;
-    width: 44px;
-    height: 44px;
+    width: 46px;
+    height: 46px;
     display: flex;
     align-items: center;
     justify-content: center;
     font-family: 'Russo One', sans-serif;
     font-size: 1.3rem;
     color: var(--text);
-    background: var(--letter-bg);
+    background: radial-gradient(circle at 35% 35%, #2d3f5e, var(--letter-bg) 70%);
     border: 2px solid var(--letter-border);
-    border-radius: 8px;
+    border-radius: 50%;
+    box-shadow: inset -3px -3px 6px rgba(0,0,0,0.4), inset 2px 2px 4px rgba(255,255,255,0.08);
     transition: top linear;
     animation: wobble 1.5s ease-in-out infinite;
     z-index: 2;
@@ -388,9 +389,10 @@ html, body {
     font-family: 'Russo One', sans-serif;
     font-size: 1.3rem;
     color: var(--text);
-    background: var(--letter-bg);
+    background: radial-gradient(circle at 35% 35%, #2d3f5e, var(--letter-bg) 70%);
     border: 2px solid var(--letter-border);
-    border-radius: 8px;
+    border-radius: 50%;
+    box-shadow: inset -3px -3px 6px rgba(0,0,0,0.4), inset 2px 2px 4px rgba(255,255,255,0.08);
     cursor: pointer;
     transition: transform 0.15s, background 0.15s, border-color 0.15s, box-shadow 0.15s;
     position: relative;
@@ -411,9 +413,9 @@ html, body {
 }
 
 .grid-letter.selected {
-    background: var(--letter-selected-bg);
+    background: radial-gradient(circle at 35% 35%, #a67c2e, var(--letter-selected-bg) 70%);
     border-color: var(--letter-selected);
-    box-shadow: 0 0 12px var(--accent-glow);
+    box-shadow: 0 0 12px var(--accent-glow), inset -3px -3px 6px rgba(0,0,0,0.3);
     transform: scale(1.08);
     z-index: 3;
 }

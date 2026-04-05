@@ -64,8 +64,8 @@ export function stopGame() {
 function getDifficulty() {
     const lvl = Math.floor(score / 50);
     return {
-        dropInterval: Math.max(500, 1500 - lvl * 100),
-        fallDuration: Math.max(800, 2000 - lvl * 120),
+        dropInterval: Math.max(800, 2500 - lvl * 100),
+        fallDuration: Math.max(1200, 3500 - lvl * 150),
     };
 }
 
