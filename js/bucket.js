@@ -9,14 +9,14 @@ const MAX_ROWS = 8;
 let grid = []; // array of rows, each row = array of COLUMNS cells
 let gridEl = null;
 let lastDropCol = -1; // track last column for bounce mechanic
-let explodingCells = new Set(); // cells mid-explosion, hidden from render
+let explodingKeys = new Set(); // "row,col" keys of cells mid-explosion
 
 export function initBucket() {
     gridEl = document.getElementById('letter-grid');
     gridEl.innerHTML = '';
     grid = [];
     lastDropCol = -1;
-    explodingCells.clear();
+    explodingKeys.clear();
 }
 
 export function getColumns() {
@@ -123,7 +123,7 @@ function renderGrid() {
     for (let r = grid.length - 1; r >= 0; r--) {
         for (let c = 0; c < COLUMNS; c++) {
             const cell = grid[r][c];
-            if (cell && !explodingCells.has(cell)) {
+            if (cell && !explodingKeys.has(`${r},${c}`)) {
                 cell.element.dataset.row = r;
                 cell.element.dataset.col = c;
                 gridEl.appendChild(cell.element);
@@ -163,10 +163,10 @@ export function isAdjacent(r1, c1, r2, c2) {
 
 // Remove cells and apply gravity
 export function removeCells(cells) {
-    // Mark cells for explosion — hide from future renders immediately
+    // Mark cells for explosion by coordinate — hide from future renders
     for (const cell of cells) {
         if (cell) {
-            explodingCells.add(cell);
+            explodingKeys.add(`${cell.row},${cell.col}`);
             if (cell.element) cell.element.classList.add('explode');
         }
     }
@@ -175,10 +175,11 @@ export function removeCells(cells) {
     return new Promise(resolve => {
         setTimeout(() => {
             for (const cell of cells) {
-                if (cell && grid[cell.row] && grid[cell.row][cell.col] === cell) {
+                const key = `${cell.row},${cell.col}`;
+                if (cell && grid[cell.row]) {
                     grid[cell.row][cell.col] = null;
                 }
-                explodingCells.delete(cell);
+                explodingKeys.delete(key);
             }
             applyGravity();
             cleanEmptyTopRows();
