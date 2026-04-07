@@ -9,12 +9,14 @@ const MAX_ROWS = 8;
 let grid = []; // array of rows, each row = array of COLUMNS cells
 let gridEl = null;
 let lastDropCol = -1; // track last column for bounce mechanic
+let explodingCells = new Set(); // cells mid-explosion, hidden from render
 
 export function initBucket() {
     gridEl = document.getElementById('letter-grid');
     gridEl.innerHTML = '';
     grid = [];
     lastDropCol = -1;
+    explodingCells.clear();
 }
 
 export function getColumns() {
@@ -121,12 +123,12 @@ function renderGrid() {
     for (let r = grid.length - 1; r >= 0; r--) {
         for (let c = 0; c < COLUMNS; c++) {
             const cell = grid[r][c];
-            if (cell) {
+            if (cell && !explodingCells.has(cell)) {
                 cell.element.dataset.row = r;
                 cell.element.dataset.col = c;
                 gridEl.appendChild(cell.element);
             } else {
-                // Empty placeholder
+                // Empty placeholder (also used for exploding cells to keep grid layout)
                 const placeholder = document.createElement('div');
                 placeholder.classList.add('grid-letter');
                 placeholder.style.visibility = 'hidden';
@@ -161,20 +163,22 @@ export function isAdjacent(r1, c1, r2, c2) {
 
 // Remove cells and apply gravity
 export function removeCells(cells) {
-    // Mark cells for explosion animation
+    // Mark cells for explosion — hide from future renders immediately
     for (const cell of cells) {
-        if (cell && cell.element) {
-            cell.element.classList.add('explode');
+        if (cell) {
+            explodingCells.add(cell);
+            if (cell.element) cell.element.classList.add('explode');
         }
     }
 
-    // After animation, actually remove
+    // After animation, actually remove from grid
     return new Promise(resolve => {
         setTimeout(() => {
             for (const cell of cells) {
                 if (cell && grid[cell.row] && grid[cell.row][cell.col] === cell) {
                     grid[cell.row][cell.col] = null;
                 }
+                explodingCells.delete(cell);
             }
             applyGravity();
             cleanEmptyTopRows();
