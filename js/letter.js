@@ -65,18 +65,38 @@ export function resetLetterHistory() {
     recentLetters = [];
 }
 
+// Generate a random organic shape for a letter tile
+export function generateRandomShape() {
+    const r = () => Math.floor(15 + Math.random() * 50); // 15%-64%
+    const borderRadius = `${r()}% ${r()}% ${r()}% ${r()}% / ${r()}% ${r()}% ${r()}% ${r()}%`;
+    const rotation = Math.random() * 36 - 18; // -18° to +18°
+    const size = 36 + Math.floor(Math.random() * 20); // 36-55px
+    const wobbleSpeed = 0.8 + Math.random() * 1.4; // 0.8-2.2s
+    return { borderRadius, rotation, size, wobbleSpeed };
+}
+
 // Create a falling letter DOM element
-export function createFallingLetter(letter, fallZone, targetCol, columns, fallDuration) {
+export function createFallingLetter(letter, fallZone, targetCol, columns, fallDuration, shape) {
     const el = document.createElement('div');
     el.classList.add('falling-letter');
     el.textContent = letter;
 
+    // Apply random shape
+    const letterSize = shape ? shape.size : 46;
+    if (shape) {
+        el.style.borderRadius = shape.borderRadius;
+        el.style.rotate = `${shape.rotation}deg`;
+        el.style.width = `${letterSize}px`;
+        el.style.height = `${letterSize}px`;
+        el.style.animationDuration = `${shape.wobbleSpeed}s`;
+    }
+
     // Position horizontally based on target column
     const zoneWidth = fallZone.clientWidth;
     const colWidth = zoneWidth / columns;
-    const x = targetCol * colWidth + (colWidth - 44) / 2;
+    const x = targetCol * colWidth + (colWidth - letterSize) / 2;
     el.style.left = `${x}px`;
-    el.style.top = '-50px';
+    el.style.top = `${-(letterSize + 6)}px`;
     el.style.transitionDuration = `${fallDuration}ms`;
 
     fallZone.appendChild(el);
@@ -84,7 +104,7 @@ export function createFallingLetter(letter, fallZone, targetCol, columns, fallDu
     // Trigger fall animation
     requestAnimationFrame(() => {
         requestAnimationFrame(() => {
-            el.style.top = `${fallZone.clientHeight - 50}px`;
+            el.style.top = `${fallZone.clientHeight - letterSize - 4}px`;
         });
     });
 
@@ -92,10 +112,16 @@ export function createFallingLetter(letter, fallZone, targetCol, columns, fallDu
 }
 
 // Create a grid letter DOM element
-export function createGridLetterElement(letter) {
+export function createGridLetterElement(letter, shape) {
     const el = document.createElement('div');
     el.classList.add('grid-letter');
     el.dataset.letter = letter;
+
+    // Apply random shape
+    if (shape) {
+        el.style.borderRadius = shape.borderRadius;
+        el.style.rotate = `${shape.rotation}deg`;
+    }
 
     const span = document.createElement('span');
     span.textContent = letter;

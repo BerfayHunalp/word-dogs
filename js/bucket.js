@@ -37,7 +37,7 @@ export function getTargetColumn() {
 }
 
 // Add a letter to the bucket. Returns true if successful, false if overflow.
-export function addLetter(letter, preferredCol) {
+export function addLetter(letter, preferredCol, shape) {
     let col = preferredCol !== undefined ? preferredCol : Math.floor(Math.random() * COLUMNS);
 
     // Bounce mechanic: if same column as last drop, bounce to adjacent
@@ -65,7 +65,7 @@ export function addLetter(letter, preferredCol) {
     }
 
     // Create the element
-    const el = createGridLetterElement(letter);
+    const el = createGridLetterElement(letter, shape);
     grid[targetRow][col] = { letter, element: el, row: targetRow, col };
 
     // Render

@@ -1,4 +1,4 @@
-import { getRandomLetter, createFallingLetter, resetLetterHistory } from './letter.js';
+import { getRandomLetter, createFallingLetter, resetLetterHistory, generateRandomShape } from './letter.js';
 import { initBucket, addLetter, getColumns, removeCells, isOverflow, getCurrentRows, getMaxRows } from './bucket.js';
 import { initInput, destroyInput, clearSelection } from './input.js';
 import { isWord } from './dictionary.js';
@@ -85,8 +85,9 @@ function dropLetter() {
     const columns = getColumns();
     const targetCol = Math.floor(Math.random() * columns);
     const diff = getDifficulty();
+    const shape = generateRandomShape();
 
-    const fallingEl = createFallingLetter(letter, fallZone, targetCol, columns, diff.fallDuration);
+    const fallingEl = createFallingLetter(letter, fallZone, targetCol, columns, diff.fallDuration, shape);
 
     // When fall animation ends, add to bucket
     const onTransitionEnd = () => {
@@ -95,7 +96,7 @@ function dropLetter() {
 
         if (!isGameActive) return;
 
-        const success = addLetter(letter, targetCol);
+        const success = addLetter(letter, targetCol, shape);
         if (!success || isOverflow()) {
             triggerGameOver();
             return;
