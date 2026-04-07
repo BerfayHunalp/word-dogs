@@ -85,7 +85,7 @@ export function createFallingLetter(letter, fallZone, targetCol, columns, fallDu
     const letterSize = shape ? shape.size : 46;
     if (shape) {
         el.style.borderRadius = shape.borderRadius;
-        el.style.rotate = `${shape.rotation}deg`;
+        el.style.setProperty('--rot', `${shape.rotation}deg`);
         el.style.width = `${letterSize}px`;
         el.style.height = `${letterSize}px`;
         el.style.animationDuration = `${shape.wobbleSpeed}s`;
@@ -120,7 +120,7 @@ export function createGridLetterElement(letter, shape) {
     // Apply random shape
     if (shape) {
         el.style.borderRadius = shape.borderRadius;
-        el.style.rotate = `${shape.rotation}deg`;
+        el.style.setProperty('--rot', `${shape.rotation}deg`);
     }
 
     const span = document.createElement('span');

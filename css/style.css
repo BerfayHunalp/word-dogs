@@ -277,6 +277,7 @@ html, body {
 }
 
 .falling-letter {
+    --rot: 0deg;
     position: absolute;
     width: 46px;
     height: 46px;
@@ -288,7 +289,7 @@ html, body {
     color: var(--text);
     background: radial-gradient(circle at 35% 35%, #2d3f5e, var(--letter-bg) 70%);
     border: 2px solid var(--letter-border);
-    border-radius: 50%;
+    border-radius: 8px;
     box-shadow: inset -3px -3px 6px rgba(0,0,0,0.4), inset 2px 2px 4px rgba(255,255,255,0.08);
     transition: top linear;
     animation: wobble 1.5s ease-in-out infinite;
@@ -297,13 +298,13 @@ html, body {
 }
 
 @keyframes wobble {
-    0% { transform: translateX(0) rotate(0deg) scale(1); }
-    15% { transform: translateX(-6px) rotate(-6deg) scale(1.05); }
-    35% { transform: translateX(4px) rotate(4deg) scale(0.95); }
-    55% { transform: translateX(-8px) rotate(-3deg) scale(1.08); }
-    75% { transform: translateX(6px) rotate(7deg) scale(0.97); }
-    90% { transform: translateX(-3px) rotate(-2deg) scale(1.03); }
-    100% { transform: translateX(0) rotate(0deg) scale(1); }
+    0% { transform: rotate(var(--rot, 0deg)) translateX(0) scale(1); }
+    15% { transform: rotate(calc(var(--rot, 0deg) - 8deg)) translateX(-8px) scale(1.06); }
+    35% { transform: rotate(calc(var(--rot, 0deg) + 6deg)) translateX(5px) scale(0.94); }
+    55% { transform: rotate(calc(var(--rot, 0deg) - 4deg)) translateX(-10px) scale(1.1); }
+    75% { transform: rotate(calc(var(--rot, 0deg) + 9deg)) translateX(7px) scale(0.96); }
+    90% { transform: rotate(calc(var(--rot, 0deg) - 3deg)) translateX(-4px) scale(1.04); }
+    100% { transform: rotate(var(--rot, 0deg)) translateX(0) scale(1); }
 }
 
 /* ========== 3D BUCKET ========== */
@@ -386,6 +387,7 @@ html, body {
 }
 
 .grid-letter {
+    --rot: 0deg;
     aspect-ratio: 1;
     display: flex;
     align-items: center;
@@ -395,9 +397,10 @@ html, body {
     color: var(--text);
     background: radial-gradient(circle at 35% 35%, #2d3f5e, var(--letter-bg) 70%);
     border: 2px solid var(--letter-border);
-    border-radius: 50%;
+    border-radius: 8px;
     box-shadow: inset -3px -3px 6px rgba(0,0,0,0.4), inset 2px 2px 4px rgba(255,255,255,0.08);
     cursor: pointer;
+    transform: rotate(var(--rot));
     transition: transform 0.15s, background 0.15s, border-color 0.15s, box-shadow 0.15s;
     position: relative;
 }
@@ -420,7 +423,7 @@ html, body {
     background: radial-gradient(circle at 35% 35%, #a67c2e, var(--letter-selected-bg) 70%);
     border-color: var(--letter-selected);
     box-shadow: 0 0 12px var(--accent-glow), inset -3px -3px 6px rgba(0,0,0,0.3);
-    transform: scale(1.08);
+    transform: rotate(var(--rot)) scale(1.08);
     z-index: 3;
 }
 
@@ -429,9 +432,9 @@ html, body {
 }
 
 @keyframes land-bounce {
-    0% { transform: scale(1.2); }
-    50% { transform: scale(0.95); }
-    100% { transform: scale(1); }
+    0% { transform: rotate(var(--rot, 0deg)) scale(1.2); }
+    50% { transform: rotate(var(--rot, 0deg)) scale(0.95); }
+    100% { transform: rotate(var(--rot, 0deg)) scale(1); }
 }
 
 .grid-letter.explode {
@@ -439,9 +442,9 @@ html, body {
 }
 
 @keyframes explode {
-    0% { transform: scale(1); opacity: 1; }
-    50% { transform: scale(1.4); opacity: 0.7; }
-    100% { transform: scale(0); opacity: 0; }
+    0% { transform: rotate(var(--rot, 0deg)) scale(1); opacity: 1; }
+    50% { transform: rotate(var(--rot, 0deg)) scale(1.4); opacity: 0.7; }
+    100% { transform: rotate(calc(var(--rot, 0deg) + 45deg)) scale(0); opacity: 0; }
 }
 
 .grid-letter.shake {
@@ -449,11 +452,11 @@ html, body {
 }
 
 @keyframes shake {
-    0%, 100% { transform: translateX(0); }
-    20% { transform: translateX(-6px); }
-    40% { transform: translateX(6px); }
-    60% { transform: translateX(-4px); }
-    80% { transform: translateX(4px); }
+    0%, 100% { transform: rotate(var(--rot, 0deg)) translateX(0); }
+    20% { transform: rotate(var(--rot, 0deg)) translateX(-6px); }
+    40% { transform: rotate(var(--rot, 0deg)) translateX(6px); }
+    60% { transform: rotate(var(--rot, 0deg)) translateX(-4px); }
+    80% { transform: rotate(var(--rot, 0deg)) translateX(4px); }
 }
 
 .grid-letter.invalid {
