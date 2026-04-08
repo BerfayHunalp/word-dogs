@@ -1,165 +1,226 @@
-import { isAdjacent, getGridElement } from './bucket.js';
+// ============================================================
+// input.js — Touch/mouse word selection on the physics canvas
+//
+// UPGRADE: Replaces old DOM-based mouse selection with
+// canvas-aware touch-first input. Ball hit detection uses
+// physics body positions. Adjacency = physical contact, not
+// grid neighbors. Includes "soft magnetism" (generous hit
+// radius) for easier mobile selection.
+// ============================================================
+
 import { isValidPrefix } from './dictionary.js';
 
-let selectedPath = [];
+// Config — injected by game.js via initInput()
+let canvas = null;
+let getBalls = null;      // () => balls array
+let areTouching = null;   // (ballA, ballB) => boolean
+let onWordSubmit = null;  // (word, path) => void
+let wordDisplay = null;   // DOM element for live word display
+
+// Selection state
+let selectedPath = [];    // Array of ball references
 let isSelecting = false;
-let onSelectionComplete = null;
-let wordDisplay = null;
+let usingTouch = false;   // Prevent double-fire on hybrid devices
 
-// Cache letter element positions for precision hit-testing
-let letterPositionCache = [];
-let cacheValid = false;
+// ===================== PUBLIC API =====================
 
-export function initInput(callback) {
-    onSelectionComplete = callback;
-    wordDisplay = document.getElementById('current-word-display');
+// Initialize input handlers — called by game.js on game start
+// Config object avoids circular imports (input.js doesn't import game.js)
+export function initInput(config) {
+    canvas = config.canvas;
+    getBalls = config.getBalls;
+    areTouching = config.areTouching;
+    onWordSubmit = config.onWordSubmit;
+    wordDisplay = config.wordDisplay;
 
-    const gridEl = getGridElement();
+    selectedPath = [];
+    isSelecting = false;
+    usingTouch = false;
 
-    gridEl.addEventListener('mousedown', onMouseDown);
-    document.addEventListener('mousemove', onMouseMove);
-    document.addEventListener('mouseup', onMouseUp);
+    // Touch events (mobile-first)
+    canvas.addEventListener('touchstart', onTouchStart, { passive: false });
+    canvas.addEventListener('touchmove', onTouchMove, { passive: false });
+    canvas.addEventListener('touchend', onTouchEnd);
 
-    // Prevent text selection and context menu
-    gridEl.addEventListener('contextmenu', e => e.preventDefault());
-    gridEl.addEventListener('selectstart', e => e.preventDefault());
+    // Mouse events (desktop fallback)
+    canvas.addEventListener('mousedown', onMouseDown);
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
 }
 
+// Remove all event listeners — called on game stop
 export function destroyInput() {
-    const gridEl = getGridElement();
-    if (gridEl) {
-        gridEl.removeEventListener('mousedown', onMouseDown);
+    if (canvas) {
+        canvas.removeEventListener('touchstart', onTouchStart);
+        canvas.removeEventListener('touchmove', onTouchMove);
+        canvas.removeEventListener('touchend', onTouchEnd);
+        canvas.removeEventListener('mousedown', onMouseDown);
     }
-    document.removeEventListener('mousemove', onMouseMove);
-    document.removeEventListener('mouseup', onMouseUp);
+    window.removeEventListener('mousemove', onMouseMove);
+    window.removeEventListener('mouseup', onMouseUp);
+    selectedPath = [];
+    isSelecting = false;
+    updateWordDisplay();
 }
 
-// Rebuild position cache for all visible grid letters
-export function invalidatePositionCache() {
-    cacheValid = false;
+// Get current selection (read by game.js for rendering highlights)
+export function getSelectedPath() {
+    return selectedPath;
 }
 
-function rebuildCache() {
-    letterPositionCache = [];
-    const letters = document.querySelectorAll('.grid-letter[data-row]');
-    letters.forEach(el => {
-        if (el.style.visibility === 'hidden') return;
-        const rect = el.getBoundingClientRect();
-        letterPositionCache.push({
-            element: el,
-            row: parseInt(el.dataset.row),
-            col: parseInt(el.dataset.col),
-            letter: el.dataset.letter,
-            cx: rect.left + rect.width / 2,
-            cy: rect.top + rect.height / 2,
-            halfW: rect.width / 2,
-            halfH: rect.height / 2,
-            // Expanded hit area (20% larger) for easier targeting
-            hitRadius: Math.max(rect.width, rect.height) * 0.6
-        });
-    });
-    cacheValid = true;
+// Clear selection and reset word display
+export function clearSelection() {
+    selectedPath = [];
+    isSelecting = false;
+    updateWordDisplay();
 }
 
-// Find closest letter to mouse position using cached rects
-// More precise than elementFromPoint — uses center distance + expanded hit area
-function findLetterAtPoint(x, y) {
-    if (!cacheValid) rebuildCache();
+// ===================== TOUCH EVENTS =====================
 
-    let closest = null;
-    let closestDist = Infinity;
-
-    for (const entry of letterPositionCache) {
-        const dx = x - entry.cx;
-        const dy = y - entry.cy;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-
-        // Must be within expanded hit radius
-        if (dist <= entry.hitRadius && dist < closestDist) {
-            closestDist = dist;
-            closest = entry;
-        }
-    }
-
-    return closest;
+function onTouchStart(e) {
+    usingTouch = true;
+    e.preventDefault();
+    const pos = touchToCanvas(e.touches[0]);
+    handleStart(pos.x, pos.y);
 }
+
+function onTouchMove(e) {
+    e.preventDefault();
+    const pos = touchToCanvas(e.touches[0]);
+    handleMove(pos.x, pos.y);
+}
+
+function onTouchEnd(e) {
+    e.preventDefault();
+    handleEnd();
+}
+
+// ===================== MOUSE EVENTS =====================
 
 function onMouseDown(e) {
-    // Rebuild cache on each selection start (letters may have changed)
-    rebuildCache();
-
-    const cell = findLetterAtPoint(e.clientX, e.clientY);
-    if (!cell) return;
-
-    e.preventDefault();
-    isSelecting = true;
-    selectedPath = [];
-    addToPath(cell);
-    updateDisplay();
+    if (usingTouch) return; // Ignore mouse on touch devices
+    const pos = mouseToCanvas(e);
+    handleStart(pos.x, pos.y);
 }
 
 function onMouseMove(e) {
-    if (!isSelecting) return;
-    e.preventDefault();
+    if (usingTouch || !isSelecting) return;
+    const pos = mouseToCanvas(e);
+    handleMove(pos.x, pos.y);
+}
 
-    const cell = findLetterAtPoint(e.clientX, e.clientY);
-    if (!cell) return;
+function onMouseUp() {
+    if (usingTouch) return;
+    handleEnd();
+}
+
+// ===================== COORDINATE HELPERS =====================
+
+function touchToCanvas(touch) {
+    const rect = canvas.getBoundingClientRect();
+    return { x: touch.clientX - rect.left, y: touch.clientY - rect.top };
+}
+
+function mouseToCanvas(e) {
+    const rect = canvas.getBoundingClientRect();
+    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+}
+
+// ===================== SELECTION LOGIC =====================
+
+// Find the closest non-popping ball to (x, y) within hit range
+// Uses a generous 1.3x radius for "soft magnetism" — makes mobile
+// selection feel forgiving without being imprecise
+// "CATCH A RIIIIIIIIDE!" — Scooter (catching letters since 2026)
+function findBallAt(x, y) {
+    const allBalls = getBalls();
+    let closest = null;
+    let closestDist = Infinity;
+
+    for (const ball of allBalls) {
+        if (ball.popping > 0) continue;
+        const pos = ball.body.position;
+        const dx = x - pos.x;
+        const dy = y - pos.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const hitRadius = ball.radius * 1.3; // Soft magnetism
+        if (dist <= hitRadius && dist < closestDist) {
+            closest = ball;
+            closestDist = dist;
+        }
+    }
+    return closest;
+}
+
+// Finger/mouse went down — start a new selection path
+function handleStart(x, y) {
+    const ball = findBallAt(x, y);
+    if (!ball) return;
+
+    isSelecting = true;
+    selectedPath = [ball];
+    updateWordDisplay();
+}
+
+// Finger/mouse is moving — extend, backtrack, or ignore
+function handleMove(x, y) {
+    if (!isSelecting) return;
+
+    const ball = findBallAt(x, y);
+    if (!ball) return;
 
     const last = selectedPath[selectedPath.length - 1];
     if (!last) return;
 
-    // Same cell as current last — ignore
-    if (last.row === cell.row && last.col === cell.col) return;
+    // Same ball — ignore
+    if (ball.id === last.id) return;
 
-    // Check if backtracking (hovering over second-to-last)
+    // Backtracking: hovering over the second-to-last ball undoes the last step
     if (selectedPath.length >= 2) {
         const prev = selectedPath[selectedPath.length - 2];
-        if (prev.row === cell.row && prev.col === cell.col) {
-            const removed = selectedPath.pop();
-            removed.element.classList.remove('selected');
-            updateDisplay();
+        if (ball.id === prev.id) {
+            selectedPath.pop();
+            updateWordDisplay();
             return;
         }
     }
 
-    // Check if already in path
-    if (selectedPath.some(p => p.row === cell.row && p.col === cell.col)) return;
+    // Already in path — ignore (each ball used only once per word)
+    if (selectedPath.some(b => b.id === ball.id)) return;
 
-    // Check adjacency
-    if (!isAdjacent(last.row, last.col, cell.row, cell.col)) return;
+    // Must be physically touching the last selected ball
+    if (!areTouching(last, ball)) return;
 
-    addToPath(cell);
-    updateDisplay();
+    // Valid addition to the path
+    selectedPath.push(ball);
+    updateWordDisplay();
 }
 
-function onMouseUp(e) {
+// Finger/mouse released — submit the word
+// "SHHOOOOTTT MEEE IN THE FACE!" — Face McShooty (submit that word already)
+function handleEnd() {
     if (!isSelecting) return;
     isSelecting = false;
 
-    const word = selectedPath.map(p => p.letter).join('');
+    const word = selectedPath.map(b => b.letter).join('');
 
-    // Clear visual selection
-    for (const p of selectedPath) {
-        p.element.classList.remove('selected');
+    if (onWordSubmit && word.length > 0) {
+        // game.js will validate, score, and call clearSelection()
+        onWordSubmit(word, [...selectedPath]);
+    } else {
+        // Empty selection — just clear
+        selectedPath = [];
+        updateWordDisplay();
     }
-
-    // Callback with path and word
-    if (onSelectionComplete && word.length >= 2) {
-        onSelectionComplete(word, [...selectedPath]);
-    }
-
-    selectedPath = [];
-    updateDisplay();
 }
 
-function addToPath(cell) {
-    cell.element.classList.add('selected');
-    selectedPath.push(cell);
-}
+// ===================== WORD DISPLAY =====================
+// Updates the live word indicator in the HTML score bar
+// Shows green for valid prefix, red for invalid prefix
 
-function updateDisplay() {
+function updateWordDisplay() {
     if (!wordDisplay) return;
-    const word = selectedPath.map(p => p.letter).join('');
+    const word = selectedPath.map(b => b.letter).join('');
     wordDisplay.textContent = word;
 
     wordDisplay.classList.remove('valid-prefix', 'invalid-prefix');
@@ -169,16 +230,5 @@ function updateDisplay() {
         } else {
             wordDisplay.classList.add('invalid-prefix');
         }
-    }
-}
-
-export function clearSelection() {
-    for (const p of selectedPath) {
-        p.element.classList.remove('selected');
-    }
-    selectedPath = [];
-    if (wordDisplay) {
-        wordDisplay.textContent = '';
-        wordDisplay.classList.remove('valid-prefix', 'invalid-prefix');
     }
 }

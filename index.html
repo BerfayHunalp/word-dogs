@@ -94,9 +94,11 @@
     </div>
 
     <!-- Game Screen -->
+    <!-- UPDATED: Replaced DOM grid/bucket with a single <canvas> -->
+    <!-- Matter.js physics renders here; score bar stays as HTML overlay -->
     <div id="game-screen" class="screen">
         <div id="game-container">
-            <!-- Score Bar -->
+            <!-- Score Bar (HTML overlay) -->
             <div id="score-bar">
                 <div class="score-left">
                     <span class="score-label">SCORE</span>
@@ -111,24 +113,8 @@
                 </div>
             </div>
 
-            <!-- Fall Zone -->
-            <div id="fall-zone"></div>
-
-            <!-- 3D Bucket -->
-            <div id="bucket-wrapper">
-                <div id="bucket">
-                    <div id="bucket-wall-left" class="bucket-wall"></div>
-                    <div id="bucket-wall-right" class="bucket-wall"></div>
-                    <div id="bucket-floor"></div>
-                    <div id="letter-grid"></div>
-                </div>
-            </div>
-
-            <!-- Splash particles container -->
-            <div id="splash-particles"></div>
-
-            <!-- Float Scores Container -->
-            <div id="float-scores"></div>
+            <!-- Physics canvas — all game rendering happens here -->
+            <canvas id="game-canvas"></canvas>
         </div>
     </div>
 
@@ -159,6 +145,8 @@
         </div>
     </div>
 
+    <!-- Matter.js physics engine (CDN) — must load before game modules -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.20.0/matter.min.js"></script>
     <script type="module" src="js/main.js"></script>
 </body>
 </html>

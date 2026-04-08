@@ -1,6 +1,13 @@
-import { getLetterPoints } from './scoring.js';
+// ============================================================
+// letter.js — Letter generation with French frequency weighting
+//
+// UPDATE: Removed DOM element creation (now done on canvas).
+// Added getRandomBallRadius() for physics ball sizes.
+// Letter frequency logic unchanged — still French-weighted.
+// ============================================================
 
 // French letter frequencies (weights out of ~10000)
+// Source: French text corpus frequency analysis
 const LETTER_WEIGHTS = {
     E: 1210, A: 711, I: 659, S: 651, N: 639, R: 607, T: 592,
     O: 502, L: 496, U: 449, D: 367, C: 318, M: 262, P: 249,
@@ -9,9 +16,8 @@ const LETTER_WEIGHTS = {
 };
 
 const VOWELS = ['A', 'E', 'I', 'O', 'U'];
-const CONSONANTS = Object.keys(LETTER_WEIGHTS).filter(l => !VOWELS.includes(l));
 
-// Build cumulative distribution
+// Pre-compute cumulative distribution for weighted random selection
 const letters = Object.keys(LETTER_WEIGHTS);
 const totalWeight = Object.values(LETTER_WEIGHTS).reduce((a, b) => a + b, 0);
 const cumulative = [];
@@ -21,7 +27,7 @@ for (const l of letters) {
     cumulative.push({ letter: l, threshold: sum / totalWeight });
 }
 
-// Vowel-only distribution
+// Vowel-only distribution (used when forcing a vowel after consonant streak)
 const vowelWeights = VOWELS.map(v => ({ letter: v, weight: LETTER_WEIGHTS[v] }));
 const vowelTotal = vowelWeights.reduce((a, b) => a + b.weight, 0);
 const vowelCumulative = [];
@@ -31,8 +37,10 @@ for (const v of vowelWeights) {
     vowelCumulative.push({ letter: v.letter, threshold: vSum / vowelTotal });
 }
 
+// Track recent letters to prevent frustrating consonant floods
+// "I have a lot of money, so I bought this hat." — Handsome Jack
 let recentLetters = [];
-const MAX_CONSONANT_STREAK = 2;
+const MAX_CONSONANT_STREAK = 2; // Force a vowel after 2 consecutive consonants
 
 function pickFromDist(dist) {
     const r = Math.random();
@@ -42,18 +50,14 @@ function pickFromDist(dist) {
     return dist[dist.length - 1].letter;
 }
 
+// Get a random letter, weighted by French frequency
+// Prevents long consonant streaks (frustrating for word building)
 export function getRandomLetter() {
-    // Check consonant streak — force vowel if needed
     const recentConsonants = recentLetters.slice(-MAX_CONSONANT_STREAK);
     const needVowel = recentConsonants.length >= MAX_CONSONANT_STREAK &&
         recentConsonants.every(l => !VOWELS.includes(l));
 
-    let letter;
-    if (needVowel) {
-        letter = pickFromDist(vowelCumulative);
-    } else {
-        letter = pickFromDist(cumulative);
-    }
+    const letter = needVowel ? pickFromDist(vowelCumulative) : pickFromDist(cumulative);
 
     recentLetters.push(letter);
     if (recentLetters.length > 10) recentLetters.shift();
@@ -61,82 +65,22 @@ export function getRandomLetter() {
     return letter;
 }
 
+// Reset on game start
 export function resetLetterHistory() {
     recentLetters = [];
 }
 
-// Generate a random organic shape for a letter tile
-export function generateRandomShape() {
-    const r = () => Math.floor(15 + Math.random() * 50); // 15%-64%
-    const borderRadius = `${r()}% ${r()}% ${r()}% ${r()}% / ${r()}% ${r()}% ${r()}% ${r()}%`;
-    const rotation = Math.random() * 36 - 18; // -18° to +18°
-    const size = 36 + Math.floor(Math.random() * 20); // 36-55px
-    const wobbleSpeed = 0.8 + Math.random() * 1.4; // 0.8-2.2s
-    return { borderRadius, rotation, size, wobbleSpeed };
-}
+// NEW: Generate a random ball radius for the physics engine
+// Base size varies slightly (19-24px). Higher levels occasionally
+// spawn larger balls (24-35px) to increase difficulty via physics
+// pressure — bigger balls take more space in the bucket.
+export function getRandomBallRadius(level) {
+    const base = 19 + Math.random() * 5; // 19-24px base
 
-// Create a falling letter DOM element
-export function createFallingLetter(letter, fallZone, targetCol, columns, fallDuration, shape) {
-    const el = document.createElement('div');
-    el.classList.add('falling-letter');
-    el.textContent = letter;
-
-    // Apply random shape
-    const letterSize = shape ? shape.size : 46;
-    if (shape) {
-        el.style.borderRadius = shape.borderRadius;
-        el.style.setProperty('--rot', `${shape.rotation}deg`);
-        el.style.width = `${letterSize}px`;
-        el.style.height = `${letterSize}px`;
-        el.style.animationDuration = `${shape.wobbleSpeed}s`;
+    // Higher levels: growing chance of larger balls
+    if (level >= 3 && Math.random() < Math.min(0.2, 0.04 * (level - 2))) {
+        return base + 5 + Math.random() * 6; // 24-35px larger ball
     }
 
-    // Position horizontally based on target column
-    const zoneWidth = fallZone.clientWidth;
-    const colWidth = zoneWidth / columns;
-    const x = targetCol * colWidth + (colWidth - letterSize) / 2;
-    el.style.left = `${x}px`;
-    el.style.top = `${-(letterSize + 6)}px`;
-    el.style.transitionDuration = `${fallDuration}ms`;
-
-    fallZone.appendChild(el);
-
-    // Trigger fall animation
-    requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-            el.style.top = `${fallZone.clientHeight - letterSize - 4}px`;
-        });
-    });
-
-    return el;
-}
-
-// Create a grid letter DOM element
-export function createGridLetterElement(letter, shape) {
-    const el = document.createElement('div');
-    el.classList.add('grid-letter');
-    el.dataset.letter = letter;
-
-    // Apply random shape
-    if (shape) {
-        el.style.borderRadius = shape.borderRadius;
-        el.style.setProperty('--rot', `${shape.rotation}deg`);
-    }
-
-    const span = document.createElement('span');
-    span.textContent = letter;
-    el.appendChild(span);
-
-    const pts = document.createElement('span');
-    pts.classList.add('letter-points');
-    pts.textContent = getLetterPoints(letter);
-    el.appendChild(pts);
-
-    // Landing animation
-    el.classList.add('landing');
-    el.addEventListener('animationend', () => {
-        el.classList.remove('landing');
-    }, { once: true });
-
-    return el;
+    return base;
 }
