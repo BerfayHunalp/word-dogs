@@ -1,12 +1,14 @@
-// Wardogs API — Cloudflare Worker with D1
+// ============================================================
+// Wardogs API — Cloudflare Worker with D1 + Durable Objects
+// "WELCOME TO THE THUNDERDOME!" — Mr. Torgue (multiplayer is live)
+// ============================================================
 
 const CORS_HEADERS = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, Upgrade',
 };
 
-// Simple JWT-like token using HMAC-SHA256
 const TOKEN_SECRET = 'wardogs-secret-change-in-production';
 const TOKEN_EXPIRY = 7 * 24 * 60 * 60 * 1000; // 7 days
 
@@ -20,7 +22,20 @@ export default {
         const path = url.pathname;
 
         try {
-            // Auth routes
+            // ==================== WEBSOCKET ROUTE ====================
+            // Route /ws to the matchmaker Durable Object
+            if (path === '/ws') {
+                const upgradeHeader = request.headers.get('Upgrade');
+                if (upgradeHeader !== 'websocket') {
+                    return json({ error: 'Expected WebSocket' }, 426);
+                }
+                // Use a single global matchmaker instance
+                const id = env.MATCHMAKER.idFromName('global');
+                const stub = env.MATCHMAKER.get(id);
+                return stub.fetch(request);
+            }
+
+            // ==================== REST API ROUTES ====================
             if (path === '/api/signup' && request.method === 'POST') {
                 return await handleSignup(request, env);
             }
@@ -28,7 +43,6 @@ export default {
                 return await handleLogin(request, env);
             }
 
-            // Protected routes
             const user = await authenticate(request, env);
 
             if (path === '/api/me' && request.method === 'GET') {
@@ -55,6 +69,214 @@ export default {
     }
 };
 
+// ============================================================
+// Durable Object: Matchmaker — handles WebSocket multiplayer
+//
+// Single global instance that pairs players into rooms.
+// Each room gets a shared seed so both players see the same
+// letter sequence. Players send score updates and interference
+// effects through the matchmaker which relays to the opponent.
+// ============================================================
+
+export class Matchmaker {
+    constructor(state, env) {
+        this.state = state;
+        this.env = env;
+        // Waiting player (not yet matched)
+        this.waitingPlayer = null;
+        // Active rooms: Map<roomId, { players: [PlayerConn, PlayerConn], seed }>
+        this.rooms = new Map();
+    }
+
+    async fetch(request) {
+        const pair = new WebSocketPair();
+        const [client, server] = [pair[0], pair[1]];
+
+        // Extract optional token for username
+        const url = new URL(request.url);
+        const token = url.searchParams.get('token');
+        let username = 'Joueur';
+        if (token) {
+            try {
+                const payload = await verifyToken(token);
+                if (payload && payload.sub) username = `Player#${payload.sub}`;
+            } catch { /* guest */ }
+        }
+
+        const playerId = crypto.randomUUID();
+
+        const conn = {
+            ws: server,
+            playerId,
+            username,
+            roomId: null,
+            score: 0,
+            level: 1,
+        };
+
+        this.state.acceptWebSocket(server);
+
+        server.addEventListener('message', (event) => {
+            try {
+                const msg = JSON.parse(event.data);
+                this.handleMessage(conn, msg);
+            } catch (e) {
+                console.error('WS message error:', e);
+            }
+        });
+
+        server.addEventListener('close', () => {
+            this.handleDisconnect(conn);
+        });
+
+        server.addEventListener('error', () => {
+            this.handleDisconnect(conn);
+        });
+
+        return new Response(null, { status: 101, webSocket: client });
+    }
+
+    handleMessage(conn, msg) {
+        switch (msg.type) {
+            case 'findMatch':
+                this.matchPlayer(conn);
+                break;
+
+            case 'scoreUpdate':
+                this.relayToOpponent(conn, {
+                    type: 'opponentScore',
+                    score: msg.score || 0,
+                    level: msg.level || 1,
+                });
+                conn.score = msg.score || 0;
+                conn.level = msg.level || 1;
+                break;
+
+            case 'interference':
+                this.relayToOpponent(conn, {
+                    type: 'interference',
+                    effectType: msg.effectType,
+                    duration: msg.duration || 5000,
+                });
+                break;
+
+            case 'gameOver':
+                this.relayToOpponent(conn, {
+                    type: 'opponentGameOver',
+                    finalScore: msg.finalScore || 0,
+                });
+                // Clean up the room after a delay
+                if (conn.roomId) {
+                    setTimeout(() => this.cleanupRoom(conn.roomId), 5000);
+                }
+                break;
+
+            default:
+                console.log('Unknown message type:', msg.type);
+        }
+    }
+
+    matchPlayer(conn) {
+        if (this.waitingPlayer && this.waitingPlayer.ws.readyState === 1) {
+            // Match found! Create a room
+            const roomId = crypto.randomUUID();
+            const seed = Math.floor(Math.random() * 2147483647);
+
+            const player1 = this.waitingPlayer;
+            const player2 = conn;
+            this.waitingPlayer = null;
+
+            player1.roomId = roomId;
+            player2.roomId = roomId;
+
+            this.rooms.set(roomId, {
+                players: [player1, player2],
+                seed,
+                createdAt: Date.now(),
+            });
+
+            // Notify both players
+            this.send(player1, {
+                type: 'roomJoined',
+                roomId,
+                playerId: player1.playerId,
+            });
+            this.send(player2, {
+                type: 'roomJoined',
+                roomId,
+                playerId: player2.playerId,
+            });
+
+            // Send match info with shared seed
+            this.send(player1, {
+                type: 'matchFound',
+                opponentName: player2.username,
+                seed,
+            });
+            this.send(player2, {
+                type: 'matchFound',
+                opponentName: player1.username,
+                seed,
+            });
+
+        } else {
+            // No one waiting — this player waits
+            this.waitingPlayer = conn;
+            this.send(conn, {
+                type: 'roomJoined',
+                roomId: 'waiting',
+                playerId: conn.playerId,
+            });
+        }
+    }
+
+    relayToOpponent(sender, msg) {
+        if (!sender.roomId) return;
+        const room = this.rooms.get(sender.roomId);
+        if (!room) return;
+
+        for (const player of room.players) {
+            if (player.playerId !== sender.playerId && player.ws.readyState === 1) {
+                this.send(player, msg);
+            }
+        }
+    }
+
+    handleDisconnect(conn) {
+        // If this was the waiting player, clear the queue
+        if (this.waitingPlayer && this.waitingPlayer.playerId === conn.playerId) {
+            this.waitingPlayer = null;
+        }
+
+        // Notify opponent if in a room
+        if (conn.roomId) {
+            this.relayToOpponent(conn, { type: 'opponentGameOver', finalScore: conn.score });
+            this.cleanupRoom(conn.roomId);
+        }
+    }
+
+    cleanupRoom(roomId) {
+        const room = this.rooms.get(roomId);
+        if (room) {
+            for (const player of room.players) {
+                player.roomId = null;
+                try { if (player.ws.readyState === 1) player.ws.close(); } catch { /* ignore */ }
+            }
+            this.rooms.delete(roomId);
+        }
+    }
+
+    send(conn, data) {
+        try {
+            if (conn.ws.readyState === 1) {
+                conn.ws.send(JSON.stringify(data));
+            }
+        } catch (e) {
+            console.error('WS send error:', e);
+        }
+    }
+}
+
 // ========== AUTH ==========
 
 async function handleSignup(request, env) {
@@ -73,7 +295,6 @@ async function handleSignup(request, env) {
         return json({ error: 'Email invalide' }, 400);
     }
 
-    // Check if username or email already taken
     const existing = await env.DB.prepare(
         'SELECT id FROM users WHERE username = ? OR email = ?'
     ).bind(username, email).first();
@@ -82,17 +303,13 @@ async function handleSignup(request, env) {
         return json({ error: 'Nom d\'utilisateur ou email déjà utilisé' }, 409);
     }
 
-    // Hash password
     const passwordHash = await hashPassword(password);
-
-    // Insert user
     const result = await env.DB.prepare(
         'INSERT INTO users (username, email, password_hash) VALUES (?, ?, ?)'
     ).bind(username, email, passwordHash).run();
 
     const userId = result.meta.last_row_id;
     const token = await createToken(userId);
-
     return json({ token, user: { id: userId, username, email } }, 201);
 }
 
@@ -116,7 +333,6 @@ async function handleLogin(request, env) {
         return json({ error: 'Email ou mot de passe incorrect' }, 401);
     }
 
-    // Update last login
     await env.DB.prepare(
         'UPDATE users SET last_login = datetime(\'now\') WHERE id = ?'
     ).bind(user.id).run();
@@ -149,7 +365,6 @@ async function handleGetScores(request, env, user) {
         'SELECT score, level, words_found, best_word, played_at FROM scores WHERE user_id = ? ORDER BY played_at DESC LIMIT ?'
     ).bind(user.id, limit).all();
 
-    // Also get personal best and total games
     const stats = await env.DB.prepare(
         'SELECT MAX(score) as best_score, COUNT(*) as total_games, SUM(words_found) as total_words FROM scores WHERE user_id = ?'
     ).bind(user.id).first();
@@ -185,13 +400,9 @@ async function hashPassword(password) {
     const encoder = new TextEncoder();
     const salt = crypto.getRandomValues(new Uint8Array(16));
     const saltHex = Array.from(salt).map(b => b.toString(16).padStart(2, '0')).join('');
-
-    const key = await crypto.subtle.importKey(
-        'raw', encoder.encode(password), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
-    );
+    const key = await crypto.subtle.importKey('raw', encoder.encode(password), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
     const sig = await crypto.subtle.sign('HMAC', key, salt);
     const hashHex = Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2, '0')).join('');
-
     return `${saltHex}:${hashHex}`;
 }
 
@@ -199,66 +410,42 @@ async function verifyPassword(password, stored) {
     const [saltHex, storedHash] = stored.split(':');
     const salt = new Uint8Array(saltHex.match(/.{2}/g).map(b => parseInt(b, 16)));
     const encoder = new TextEncoder();
-
-    const key = await crypto.subtle.importKey(
-        'raw', encoder.encode(password), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
-    );
+    const key = await crypto.subtle.importKey('raw', encoder.encode(password), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
     const sig = await crypto.subtle.sign('HMAC', key, salt);
     const hashHex = Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2, '0')).join('');
-
     return hashHex === storedHash;
 }
 
 async function createToken(userId) {
-    const payload = {
-        sub: userId,
-        exp: Date.now() + TOKEN_EXPIRY,
-    };
+    const payload = { sub: userId, exp: Date.now() + TOKEN_EXPIRY };
     const encoded = btoa(JSON.stringify(payload));
     const encoder = new TextEncoder();
-
-    const key = await crypto.subtle.importKey(
-        'raw', encoder.encode(TOKEN_SECRET), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
-    );
+    const key = await crypto.subtle.importKey('raw', encoder.encode(TOKEN_SECRET), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
     const sig = await crypto.subtle.sign('HMAC', key, encoder.encode(encoded));
     const sigHex = Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2, '0')).join('');
-
     return `${encoded}.${sigHex}`;
 }
 
 async function verifyToken(token) {
     const [encoded, sigHex] = token.split('.');
     if (!encoded || !sigHex) return null;
-
     const encoder = new TextEncoder();
-    const key = await crypto.subtle.importKey(
-        'raw', encoder.encode(TOKEN_SECRET), { name: 'HMAC', hash: 'SHA-256' }, false, ['verify']
-    );
-
+    const key = await crypto.subtle.importKey('raw', encoder.encode(TOKEN_SECRET), { name: 'HMAC', hash: 'SHA-256' }, false, ['verify']);
     const sig = new Uint8Array(sigHex.match(/.{2}/g).map(b => parseInt(b, 16)));
     const valid = await crypto.subtle.verify('HMAC', key, sig, encoder.encode(encoded));
     if (!valid) return null;
-
     const payload = JSON.parse(atob(encoded));
     if (payload.exp < Date.now()) return null;
-
     return payload;
 }
 
 async function authenticate(request, env) {
     const auth = request.headers.get('Authorization');
-    if (!auth || !auth.startsWith('Bearer ')) {
-        throw new Error('Unauthorized');
-    }
-
+    if (!auth || !auth.startsWith('Bearer ')) throw new Error('Unauthorized');
     const token = auth.slice(7);
     const payload = await verifyToken(token);
     if (!payload) throw new Error('Unauthorized');
-
-    const user = await env.DB.prepare(
-        'SELECT id, username, email FROM users WHERE id = ?'
-    ).bind(payload.sub).first();
-
+    const user = await env.DB.prepare('SELECT id, username, email FROM users WHERE id = ?').bind(payload.sub).first();
     if (!user) throw new Error('Unauthorized');
     return user;
 }

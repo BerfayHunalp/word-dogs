@@ -2,7 +2,18 @@ name = "wardogs-api"
 main = "src/index.js"
 compatibility_date = "2024-12-01"
 
+# D1 database for auth + scores
 [[d1_databases]]
 binding = "DB"
 database_name = "wardogs-db"
 database_id = "7d8c5c82-1660-4d5e-a7c4-fbfce7a9698c"
+
+# Durable Object for WebSocket multiplayer matchmaking
+[durable_objects]
+bindings = [
+  { name = "MATCHMAKER", class_name = "Matchmaker" }
+]
+
+[[migrations]]
+tag = "v1"
+new_classes = ["Matchmaker"]
