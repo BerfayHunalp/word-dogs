@@ -26,6 +26,7 @@ export default function AuthScreen({ onDone }: Props) {
   return (
     <div className="screen active" id="auth-screen">
       <div className="auth-content">
+        <img src="/assets/logo.png" alt="BH Studios" className="auth-logo" />
         <h1 className="auth-title">{t('title')}</h1>
 
         {mode === 'login' ? (

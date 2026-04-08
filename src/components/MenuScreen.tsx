@@ -20,6 +20,7 @@ export default function MenuScreen({ onPlay, onProfile, onMultiplayer, onLogout,
   return (
     <div className="screen active" id="menu-screen">
       <div className="menu-content">
+        <img src="/assets/logo.png" alt="BH Studios" className="menu-logo" />
         <h1 className="menu-title">{t('title')}</h1>
         <p className="menu-subtitle">{t('subtitle')}</p>
 

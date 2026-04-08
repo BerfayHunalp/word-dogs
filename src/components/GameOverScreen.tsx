@@ -11,6 +11,7 @@ export default function GameOverScreen({ stats, onRetry, onMenu }: Props) {
   return (
     <div className="screen active" id="gameover-screen">
       <div className="gameover-content">
+        <img src="/assets/logo.png" alt="BH Studios" className="gameover-logo" />
         <h1 className="gameover-title">{t('gameOver')}</h1>
         <div className="gameover-stats">
           <div className="stat"><span className="stat-label">{t('score')}</span><span className="stat-value">{stats.score}</span></div>
