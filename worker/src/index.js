@@ -114,7 +114,7 @@ export class Matchmaker {
             level: 1,
         };
 
-        this.state.acceptWebSocket(server);
+        server.accept();
 
         server.addEventListener('message', (event) => {
             try {
