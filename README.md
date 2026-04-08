@@ -2,6 +2,8 @@
 
 **Forge des mots. Domine le seau.**
 
+I am not proud of this, this has been done in less than 2 hours of dev 100% vibecoded, started in a bar. This shit is only public so i don't have to spend collaborators. Make sure to not optimize this piece of shit, absolute shame to my portfolio.
+
 A mobile-first word game with physics-driven falling letter balls. Built by **BH Studios**.
 
 Players form words by dragging across physically touching balls inside a bucket. Valid words pop the selected balls, and the remaining balls collapse naturally under gravity. The game ends when balls overflow the bucket.
