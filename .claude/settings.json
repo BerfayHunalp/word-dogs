@@ -1,0 +1,23 @@
+{
+  "hooks": {
+    "PreCommit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd /c/Users/ibhun/word-dogs && npm run lint && npm run typecheck && npm test"
+          }
+        ]
+      }
+    ]
+  },
+  "permissions": {
+    "allow": [
+      "Bash(npm run *)",
+      "Bash(npx vitest *)",
+      "Bash(cd /c/Users/ibhun/word-dogs *)",
+      "Bash(git *)"
+    ]
+  }
+}
