@@ -296,6 +296,7 @@ html, body, #root {
   background: rgba(245,158,11,0.1); border: 1px solid var(--accent);
 }
 .mp-lang-value { font-family: 'Russo One', sans-serif; color: var(--accent); }
+.mp-lang-picker { margin-bottom: 18px; }
 
 /* ========== GAME OVER ========== */
 #gameover-screen { background: rgba(10, 10, 15, 0.92); backdrop-filter: blur(8px); }

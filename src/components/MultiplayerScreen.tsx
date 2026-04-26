@@ -6,7 +6,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { connectMultiplayer, disconnectMultiplayer } from '../multiplayer/client';
 import { getToken } from '../api/client';
-import { t, getLangConfig } from '../i18n';
+import { loadDictionary } from '../game/dictionary';
+import { t, getLang, setLang, LANGUAGES } from '../i18n';
 import type { MultiplayerEvent } from '../multiplayer/client';
 
 interface Props {
@@ -19,8 +20,16 @@ export default function MultiplayerScreen({ onGameStart, onBack }: Props) {
   const [opponent, setOpponent] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [seed, setSeed] = useState(0);
+  const [, forceTick] = useState(0);
   const matchedRef = useRef(false);
-  const lang = getLangConfig();
+  const currentLang = getLang();
+
+  const handleLangChange = (code: string) => {
+    if (code === getLang()) return;
+    setLang(code);
+    loadDictionary();
+    forceTick(n => n + 1);
+  };
 
   // Disconnect only if we leave WITHOUT having matched. After a match the
   // socket ownership transfers to GameScreen so chat & state keep flowing.
@@ -68,10 +77,26 @@ export default function MultiplayerScreen({ onGameStart, onBack }: Props) {
       <div className="multiplayer-content">
         <h1 className="menu-title" style={{ fontSize: '2.5rem' }}>{t('multiplayer')}</h1>
 
-        <div className="mp-lang-badge">
-          <span className="score-label">{t('language')}</span>
-          <span className="mp-lang-value">{lang.name}</span>
-        </div>
+        {status === 'idle' && (
+          <div className="lang-picker mp-lang-picker">
+            {Object.values(LANGUAGES).map(l => (
+              <button
+                key={l.code}
+                className={`lang-btn ${currentLang === l.code ? 'active' : ''}`}
+                onClick={() => handleLangChange(l.code)}
+              >
+                {l.name}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {status !== 'idle' && (
+          <div className="mp-lang-badge">
+            <span className="score-label">{t('language')}</span>
+            <span className="mp-lang-value">{LANGUAGES[currentLang]?.name ?? currentLang}</span>
+          </div>
+        )}
 
         {status === 'idle' && (
           <>
