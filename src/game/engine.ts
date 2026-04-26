@@ -131,12 +131,14 @@ function rescheduleSpawnForRush() {
   scheduleNextSpawn();
 }
 
-// Difficulty: multiplies the base spawn interval. <1 = faster, >1 = slower.
-const DIFFICULTY_MULT: Record<Difficulty, number> = {
-  egoFriendly: 2.8, // super-easy, lots of thinking time
-  easy: 1.6,        // calmer drops
-  normal: 1.0,      // baseline
-  hard: 0.55,       // rapid-fire
+// Per-difficulty tuning: spawn cadence, gravity (fall speed), overflow tolerance.
+// spawnMult <1 spawns more often; gravityMult <1 makes balls float; overflowMult
+// >1 lets balls pile higher before triggering game over.
+const DIFFICULTY_CONFIG: Record<Difficulty, { spawnMult: number; gravityMult: number; overflowMult: number }> = {
+  egoFriendly: { spawnMult: 1.1, gravityMult: 0.4, overflowMult: 2.5 }, // brain-dead easy
+  easy:        { spawnMult: 1.4, gravityMult: 0.75, overflowMult: 1.4 },
+  normal:      { spawnMult: 1.0, gravityMult: 1.0, overflowMult: 1.0 },
+  hard:        { spawnMult: 0.55, gravityMult: 1.15, overflowMult: 0.8 },
 };
 let difficulty: Difficulty = 'normal';
 export function setDifficulty(d: Difficulty) { difficulty = d; }
@@ -230,6 +232,9 @@ export function startGame(seedOverride?: number) {
 
   updateScoreDisplay();
   animFrame = requestAnimationFrame(gameLoop);
+  // Seed the bucket with a few balls so the player sees letters right away,
+  // even on slow difficulties.
+  for (let i = 0; i < 4; i++) spawnBall();
   scheduleNextSpawn();
   scheduleNextShiny();
 }
@@ -394,7 +399,7 @@ function updateBalls() {
 function getSpawnInterval(): number {
   let interval = Math.max(800, 2500 - (level - 1) * 120);
   // Difficulty scales the whole spawn cadence
-  interval *= DIFFICULTY_MULT[difficulty];
+  interval *= DIFFICULTY_CONFIG[difficulty].spawnMult;
   // Interference: speed up
   if (interferences.some(e => e.type === 'speedUp')) interval *= 0.6;
   // Power-up: slow down
@@ -687,8 +692,12 @@ function gameLoop(timestamp: number) {
   const rawDelta = Math.min(timestamp - lastTime, 33);
   lastTime = timestamp;
 
-  // Hold-to-rush: empty-bucket-area press OR explicit RUSH button override
-  if (engine) engine.gravity.y = isRushOn() ? GRAVITY * RUSH_GRAVITY_MULT : GRAVITY;
+  // Hold-to-rush: empty-bucket-area press OR explicit RUSH button override.
+  // Difficulty adjusts the base gravity (Ego-friendly = floaty balls).
+  if (engine) {
+    const baseG = GRAVITY * DIFFICULTY_CONFIG[difficulty].gravityMult;
+    engine.gravity.y = isRushOn() ? baseG * RUSH_GRAVITY_MULT : baseG;
+  }
   // Detect transitions from emptyHolds (touch-on-empty) and reschedule spawn
   rescheduleSpawnForRush();
 
@@ -712,7 +721,8 @@ function checkOverflow() {
       has = true; break;
     }
   }
-  if (has) { overflowFrames++; if (overflowFrames >= OVERFLOW_THRESHOLD) triggerGameOver(); }
+  const threshold = OVERFLOW_THRESHOLD * DIFFICULTY_CONFIG[difficulty].overflowMult;
+  if (has) { overflowFrames++; if (overflowFrames >= threshold) triggerGameOver(); }
   else overflowFrames = Math.max(0, overflowFrames - 2);
 }
 
