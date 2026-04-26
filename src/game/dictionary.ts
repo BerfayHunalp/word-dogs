@@ -8,6 +8,7 @@ let wordSet: Set<string> | null = null;
 let prefixSet2: Set<string> | null = null;
 let prefixSet3: Set<string> | null = null;
 let wordsByLength: Map<number, string[]> = new Map();
+let allWords: string[] = [];
 let loadedLang = '';
 
 function normalize(word: string): string {
@@ -19,6 +20,7 @@ function buildSets(words: string[]) {
   prefixSet2 = new Set();
   prefixSet3 = new Set();
   wordsByLength = new Map();
+  allWords = [];
 
   for (const raw of words) {
     const w = normalize(raw);
@@ -29,6 +31,7 @@ function buildSets(words: string[]) {
     let bucket = wordsByLength.get(w.length);
     if (!bucket) { bucket = []; wordsByLength.set(w.length, bucket); }
     bucket.push(w);
+    if (w.length >= 3) allWords.push(w);
   }
   console.log(`Dictionary loaded: ${wordSet.size} words`);
 }
@@ -43,6 +46,22 @@ export function getRandomWordOfLength(minLen: number, maxLen: number): string | 
   if (candidates.length === 0) return null;
   const bucket = candidates[Math.floor(Math.random() * candidates.length)];
   return bucket[Math.floor(Math.random() * bucket.length)];
+}
+
+// Bots: deterministic random sample of `n` words (3+ letters) from the loaded
+// dictionary. Used to give weaker bots a smaller vocabulary.
+export function sampleWords(n: number): string[] {
+  if (allWords.length === 0) return [];
+  if (n >= allWords.length) return [...allWords];
+  const out: string[] = [];
+  const seen = new Set<number>();
+  while (out.length < n && seen.size < allWords.length) {
+    const i = Math.floor(Math.random() * allWords.length);
+    if (seen.has(i)) continue;
+    seen.add(i);
+    out.push(allWords[i]);
+  }
+  return out;
 }
 
 export async function loadDictionary(): Promise<boolean> {

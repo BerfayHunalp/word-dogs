@@ -44,6 +44,12 @@ let usingTouch = false;
 // Multi-touch: identifier -> PathState
 const touchPaths: Map<number, PathState> = new Map();
 
+// Empty-area holds: a touch (or the mouse) pressed on the bucket but not on a
+// ball. While at least one is active, the engine speeds up falling balls so
+// the player can rush to clear letters.
+const emptyHolds: Set<number | 'mouse'> = new Set();
+export function isRushActive(): boolean { return emptyHolds.size > 0 && !laserArmed; }
+
 // ==================== PUBLIC API ====================
 
 export function initInput(config: InputConfig) {
@@ -59,6 +65,7 @@ export function initInput(config: InputConfig) {
   mouseSelecting = false;
   usingTouch = false;
   touchPaths.clear();
+  emptyHolds.clear();
 
   canvas.addEventListener('touchstart', onTouchStart, { passive: false });
   canvas.addEventListener('touchmove', onTouchMove, { passive: false });
@@ -82,6 +89,7 @@ export function destroyInput() {
   mousePath = null;
   mouseSelecting = false;
   touchPaths.clear();
+  emptyHolds.clear();
   updateWordDisplay();
 }
 
@@ -104,6 +112,7 @@ export function clearSelection() {
   mousePath = null;
   mouseSelecting = false;
   touchPaths.clear();
+  emptyHolds.clear();
   updateWordDisplay();
 }
 
@@ -121,7 +130,11 @@ function onTouchStart(e: TouchEvent) {
     const p = touchPos(t);
     const player = pickPlayer(p.x);
     const ball = findClaimableBall(p.x, p.y);
-    if (!ball) continue;
+    if (!ball) {
+      // Hold on empty bucket area → engages the rush boost
+      emptyHolds.add(t.identifier);
+      continue;
+    }
     touchPaths.set(t.identifier, { player, balls: [ball] });
   }
   updateWordDisplay();
@@ -150,6 +163,7 @@ function onTouchEnd(e: TouchEvent) {
     return;
   }
   for (const t of Array.from(e.changedTouches)) {
+    emptyHolds.delete(t.identifier);
     const path = touchPaths.get(t.identifier);
     if (!path) continue;
     submitPath(path);
@@ -166,7 +180,11 @@ function onMouseDown(e: MouseEvent) {
   if (laserArmed) { laserStart = p; laserEnd = p; mouseSelecting = true; return; }
   const player = pickPlayer(p.x);
   const ball = findClaimableBall(p.x, p.y);
-  if (!ball) return;
+  if (!ball) {
+    emptyHolds.add('mouse');
+    mouseSelecting = true; // so onMouseUp clears the hold
+    return;
+  }
   mouseSelecting = true;
   mousePath = { player, balls: [ball] };
   updateWordDisplay();
@@ -185,6 +203,7 @@ function onMouseUp() {
   if (usingTouch) return;
   if (!mouseSelecting) return;
   mouseSelecting = false;
+  emptyHolds.delete('mouse');
   if (laserArmed) { fireLaserIfAny(); return; }
   if (mousePath) submitPath(mousePath);
   mousePath = null;

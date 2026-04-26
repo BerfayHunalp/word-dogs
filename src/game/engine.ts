@@ -5,7 +5,7 @@
 
 import Matter from 'matter-js';
 import { getRandomLetter, resetLetterHistory, getRandomBallRadius } from './letter';
-import { initInput, destroyInput, getSelectedPath, getActivePaths, clearSelection, armLaser, isLaserArmed, getLaserLine } from './input';
+import { initInput, destroyInput, getSelectedPath, getActivePaths, clearSelection, armLaser, isLaserArmed, getLaserLine, isRushActive } from './input';
 import { isWord, isValidPrefix } from './dictionary';
 import { getLetterPoints, calculateWordScore } from './scoring';
 import { SeededRng } from './seededRng';
@@ -21,6 +21,7 @@ const { Engine, Bodies, Composite, Vector } = Matter;
 // ===================== CONSTANTS =====================
 
 const GRAVITY = 1.8;
+const RUSH_GRAVITY_MULT = 2.6; // hold-on-bucket boost factor
 const BALL_FRICTION = 0.4;
 const BALL_RESTITUTION = 0.08;
 const BALL_DENSITY = 0.004;
@@ -663,6 +664,9 @@ function gameLoop(timestamp: number) {
   const rawDelta = Math.min(timestamp - lastTime, 33);
   lastTime = timestamp;
 
+  // Hold-to-rush: while a finger is held on empty bucket area, gravity ramps up
+  if (engine) engine.gravity.y = isRushActive() ? GRAVITY * RUSH_GRAVITY_MULT : GRAVITY;
+
   // Apply slow-motion factor to physics step
   const delta = rawDelta * slowMoFactor;
   Engine.update(engine!, delta);
@@ -883,6 +887,19 @@ function drawActiveEffects() {
     const g = ctx!.createRadialGradient(W / 2, H / 2, W * 0.3, W / 2, H / 2, W * 0.7);
     g.addColorStop(0, 'transparent'); g.addColorStop(1, 'rgba(34,211,238,0.12)');
     ctx!.fillStyle = g; ctx!.fillRect(0, 0, W, H);
+    ctx!.restore();
+  }
+  // Rush vignette + label when the player holds the bucket
+  if (isRushActive()) {
+    ctx!.save();
+    const g = ctx!.createLinearGradient(0, bucket.topY, 0, bucket.bottomY);
+    g.addColorStop(0, 'rgba(239,68,68,0.18)');
+    g.addColorStop(1, 'transparent');
+    ctx!.fillStyle = g; ctx!.fillRect(0, 0, W, H);
+    ctx!.fillStyle = '#ef4444';
+    ctx!.font = "bold 14px Inter, sans-serif";
+    ctx!.textAlign = 'center';
+    ctx!.fillText('RUSH', W / 2, bucket.topY - 6);
     ctx!.restore();
   }
   // Active power-up indicators

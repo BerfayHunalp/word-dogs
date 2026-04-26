@@ -1,39 +1,38 @@
 // ============================================================
-// bot.ts — Word-playing bot whose tempo and vocabulary scale with Elo.
-// The bot has its own virtual "side game": it picks valid words from
-// the dictionary and scores them, generating opponent score over time.
+// bot.ts — Word-playing bot whose strength is set by two simple knobs:
+//   1. how often it plays (max words per second, derived from Elo)
+//   2. how big its vocabulary is (random sample of the full dictionary)
 // ============================================================
 
-import { getRandomWordOfLength } from './dictionary';
+import { sampleWords } from './dictionary';
 import { getLangConfig } from '../i18n';
 
 export interface BotProfile {
   elo: number;
-  tickMs: number;       // time between scoring attempts
-  minLen: number;       // word length range
-  maxLen: number;
-  whiffChance: number;  // probability the tick yields no word (bot fumbled)
+  tickMs: number;       // mean time between scoring attempts
+  vocabSize: number;    // size of the bot's dictionary subset
 }
 
-// Map Elo → playing profile. Tuned so that around Elo 1000 the bot scores
-// ~30-50 pts/min, comparable to a relaxed human player.
+// Map Elo → profile. Elo 400 ≈ 1 word per 10s, vocab ~30 words.
+// Elo 2400 ≈ 1 word per second, vocab ~50k (effectively the full dict).
 export function profileFromElo(elo: number): BotProfile {
   const e = Math.max(400, Math.min(2400, elo));
-  // Faster ticks at higher Elo
-  const tickMs = Math.max(700, Math.round(6500 - (e - 400) * 2.5));
-  // Longer words at higher Elo
-  const minLen = Math.max(3, Math.min(7, Math.floor(3 + (e - 700) / 400)));
-  const maxLen = Math.max(minLen + 1, Math.min(8, Math.floor(4 + (e - 700) / 250)));
-  // Higher Elo bots whiff less often
-  const whiffChance = Math.max(0.05, Math.min(0.55, 0.6 - (e - 400) / 4000));
-  return { elo: e, tickMs, minLen, maxLen, whiffChance };
+  const t = (e - 400) / 2000; // 0..1
+
+  // Linear from 10000ms (1 / 10s) at 400 → 1000ms (1/s) at 2400.
+  const tickMs = Math.round(10000 - t * 9000);
+
+  // Exponential vocab so a few hundred Elo unlocks a meaningful jump.
+  // 30 words at 400 → ~50000 at 2400.
+  const vocabSize = Math.round(30 * Math.pow(50000 / 30, t));
+
+  return { elo: e, tickMs, vocabSize };
 }
 
 function scoreWord(word: string): number {
   const cfg = getLangConfig();
   let base = 0;
   for (const ch of word.toUpperCase()) base += cfg.letterPoints[ch] ?? 0;
-  // Length bonus matches the player-facing scoring.ts curve
   const len = word.length;
   const mult = len >= 7 ? 1.5 : len >= 5 ? 1.25 : 1;
   return Math.round(base * mult);
@@ -42,30 +41,31 @@ function scoreWord(word: string): number {
 export interface BotInstance {
   stop: () => void;
   getElo: () => number;
+  getVocabSize: () => number;
 }
 
-// Start a bot that calls onScore(points, word) at intervals dictated by Elo.
-// The caller decides what to do with those scores (typically: add to opponent
-// score in the engine and update UI).
+// Start a bot. The vocabulary is sampled once at start and the bot only ever
+// plays words from that subset, so its strength is shaped by `vocabSize`.
 export function startBot(elo: number, onScore: (points: number, word: string) => void): BotInstance {
   const profile = profileFromElo(elo);
+  const vocab = sampleWords(profile.vocabSize);
   let stopped = false;
 
   const tick = () => {
     if (stopped) return;
-    if (Math.random() >= profile.whiffChance) {
-      const word = getRandomWordOfLength(profile.minLen, profile.maxLen);
-      if (word) onScore(scoreWord(word), word);
+    if (vocab.length > 0) {
+      const word = vocab[Math.floor(Math.random() * vocab.length)];
+      onScore(scoreWord(word), word);
     }
-    // Add a small jitter so the bot doesn't feel metronomic
-    const jitter = profile.tickMs * (0.8 + Math.random() * 0.4);
+    // Slight jitter so the rate is the *mean*, not metronomic.
+    const jitter = profile.tickMs * (0.7 + Math.random() * 0.6);
     setTimeout(tick, jitter);
   };
-  // First action after the initial tick delay
   setTimeout(tick, profile.tickMs);
 
   return {
     stop: () => { stopped = true; },
     getElo: () => profile.elo,
+    getVocabSize: () => vocab.length,
   };
 }

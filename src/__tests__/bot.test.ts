@@ -10,10 +10,10 @@ describe('bot.profileFromElo', () => {
     expect(mid.tickMs).toBeGreaterThan(high.tickMs);
   });
 
-  it('produces longer max word length at higher Elo', () => {
+  it('produces a larger vocabulary at higher Elo', () => {
     const low = profileFromElo(600);
-    const high = profileFromElo(2000);
-    expect(high.maxLen).toBeGreaterThanOrEqual(low.maxLen);
+    const high = profileFromElo(2200);
+    expect(high.vocabSize).toBeGreaterThan(low.vocabSize);
   });
 
   it('clamps absurd Elo inputs into the valid range', () => {
@@ -23,18 +23,19 @@ describe('bot.profileFromElo', () => {
     expect(hugeElo.elo).toBeLessThanOrEqual(2400);
   });
 
-  it('keeps minLen <= maxLen for any sane Elo', () => {
-    for (const elo of [400, 800, 1200, 1600, 2000, 2400]) {
-      const p = profileFromElo(elo);
-      expect(p.minLen).toBeLessThanOrEqual(p.maxLen);
-      expect(p.minLen).toBeGreaterThanOrEqual(3);
-      expect(p.maxLen).toBeLessThanOrEqual(8);
-    }
+  it('keeps tick around 10 seconds at the lowest Elo', () => {
+    const low = profileFromElo(400);
+    expect(low.tickMs).toBeGreaterThanOrEqual(8000);
+    expect(low.tickMs).toBeLessThanOrEqual(11000);
   });
 
-  it('whiff chance decreases with rising Elo', () => {
-    const low = profileFromElo(500);
-    const high = profileFromElo(2200);
-    expect(high.whiffChance).toBeLessThan(low.whiffChance);
+  it('keeps tick around 1 second at the highest Elo', () => {
+    const high = profileFromElo(2400);
+    expect(high.tickMs).toBeLessThanOrEqual(1500);
+  });
+
+  it('keeps the vocabulary tiny at the lowest Elo', () => {
+    const low = profileFromElo(400);
+    expect(low.vocabSize).toBeLessThan(50);
   });
 });
