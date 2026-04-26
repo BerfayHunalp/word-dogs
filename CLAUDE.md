@@ -55,7 +55,7 @@ src/
   api/client.ts        — REST client (auth, scores, leaderboard)
   multiplayer/client.ts — WebSocket matchmaking client
   i18n/index.ts        — FR/EN translations, letter weights, Scrabble points
-  data/dictionaries/   — fr.json (85K words)
+public/dictionaries/   — fr.json (~85K words), en.json (~115K words) — refresh via `npm run fetch-dicts`
 worker/
   src/index.js         — REST API + Matchmaker Durable Object
   schema.sql           — D1 schema (users, scores tables)

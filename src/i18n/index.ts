@@ -24,7 +24,7 @@ export const LANGUAGES: Record<string, LanguageConfig> = {
       S: 1, T: 1, U: 1, V: 4, W: 10, X: 10, Y: 10, Z: 10,
     },
     dictionaryUrl: 'https://raw.githubusercontent.com/words/an-array-of-french-words/master/index.json',
-    localDictPath: '/src/data/dictionaries/fr.json',
+    localDictPath: '/dictionaries/fr.json',
   },
   en: {
     code: 'en',
@@ -42,7 +42,7 @@ export const LANGUAGES: Record<string, LanguageConfig> = {
       S: 1, T: 1, U: 1, V: 4, W: 4, X: 8, Y: 4, Z: 10,
     },
     dictionaryUrl: 'https://raw.githubusercontent.com/words/an-array-of-english-words/master/index.json',
-    localDictPath: '/src/data/dictionaries/en.json',
+    localDictPath: '/dictionaries/en.json',
   },
 };
 
@@ -96,6 +96,16 @@ const translations: Record<string, Record<string, string>> = {
     youLose: 'DÉFAITE',
     language: 'Langue',
     replay: 'REVOIR',
+    difficulty: 'Difficulté',
+    diffEasy: 'Facile',
+    diffNormal: 'Normal',
+    diffHard: 'Difficile',
+    modeSolo: 'SOLO',
+    modeAI: 'CONTRE IA',
+    modeLocalDuel: 'DUEL LOCAL',
+    modeOnline: 'EN LIGNE',
+    p1: 'J1', p2: 'J2',
+    aiLabel: 'IA',
   },
   en: {
     title: 'WARDOGS',
@@ -144,6 +154,16 @@ const translations: Record<string, Record<string, string>> = {
     youLose: 'DEFEAT',
     language: 'Language',
     replay: 'REPLAY',
+    difficulty: 'Difficulty',
+    diffEasy: 'Easy',
+    diffNormal: 'Normal',
+    diffHard: 'Hard',
+    modeSolo: 'SOLO',
+    modeAI: 'VS AI',
+    modeLocalDuel: 'LOCAL DUEL',
+    modeOnline: 'ONLINE',
+    p1: 'P1', p2: 'P2',
+    aiLabel: 'AI',
   },
 };
 

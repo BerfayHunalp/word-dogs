@@ -1,17 +1,24 @@
 import { isLoggedIn, getUser, logout } from '../api/client';
 import { getHighScore } from '../game/engine';
 import { t, LANGUAGES } from '../i18n';
+import type { Difficulty } from '../game/types';
+import type { GameMode } from '../App';
 
 interface Props {
-  onPlay: () => void;
+  onModeSelect: (mode: GameMode) => void;
   onProfile: () => void;
-  onMultiplayer: () => void;
   onLogout: () => void;
   lang: string;
   onLangChange: (code: string) => void;
+  difficulty: Difficulty;
+  onDifficultyChange: (d: Difficulty) => void;
 }
 
-export default function MenuScreen({ onPlay, onProfile, onMultiplayer, onLogout, lang, onLangChange }: Props) {
+const DIFFICULTIES: Difficulty[] = ['easy', 'normal', 'hard'];
+
+export default function MenuScreen({
+  onModeSelect, onProfile, onLogout, lang, onLangChange, difficulty, onDifficultyChange,
+}: Props) {
   const loggedIn = isLoggedIn();
   const user = getUser();
 
@@ -24,13 +31,27 @@ export default function MenuScreen({ onPlay, onProfile, onMultiplayer, onLogout,
         <h1 className="menu-title">{t('title')}</h1>
         <p className="menu-subtitle">{t('subtitle')}</p>
 
-        {/* Language picker */}
         <div className="lang-picker">
           {Object.values(LANGUAGES).map(l => (
             <button key={l.code} className={`lang-btn ${lang === l.code ? 'active' : ''}`} onClick={() => onLangChange(l.code)}>
               {l.name}
             </button>
           ))}
+        </div>
+
+        <div className="difficulty-picker">
+          <span className="difficulty-label">{t('difficulty')}</span>
+          <div className="difficulty-row">
+            {DIFFICULTIES.map(d => (
+              <button
+                key={d}
+                className={`diff-btn ${difficulty === d ? 'active' : ''}`}
+                onClick={() => onDifficultyChange(d)}
+              >
+                {t('diff' + d.charAt(0).toUpperCase() + d.slice(1))}
+              </button>
+            ))}
+          </div>
         </div>
 
         {loggedIn && user && (
@@ -40,8 +61,13 @@ export default function MenuScreen({ onPlay, onProfile, onMultiplayer, onLogout,
           </div>
         )}
 
-        <button className="btn-primary" onClick={onPlay}>{t('play')}</button>
-        <button className="btn-primary" style={{ background: '#7c3aed', boxShadow: '0 4px 20px rgba(124,58,237,0.4)' }} onClick={onMultiplayer}>{t('multiplayer')}</button>
+        <div className="mode-grid">
+          <button className="btn-primary" onClick={() => onModeSelect('solo')}>{t('modeSolo')}</button>
+          <button className="btn-primary" style={{ background: '#06b6d4', boxShadow: '0 4px 20px rgba(6,182,212,0.4)' }} onClick={() => onModeSelect('ai')}>{t('modeAI')}</button>
+          <button className="btn-primary" style={{ background: '#22c55e', boxShadow: '0 4px 20px rgba(34,197,94,0.4)' }} onClick={() => onModeSelect('localDuel')}>{t('modeLocalDuel')}</button>
+          <button className="btn-primary" style={{ background: '#7c3aed', boxShadow: '0 4px 20px rgba(124,58,237,0.4)' }} onClick={() => onModeSelect('online')}>{t('modeOnline')}</button>
+        </div>
+
         {loggedIn && <button className="btn-secondary" onClick={onProfile}>{t('profile')}</button>}
 
         <div className="high-score-display">

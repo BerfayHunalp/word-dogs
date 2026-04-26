@@ -64,6 +64,11 @@ html, body, #root {
 }
 .btn-secondary:hover { transform: scale(1.05); border-color: var(--text); color: var(--text); }
 
+/* ========== LANGUAGE CHOICE SCREEN ========== */
+#lang-screen { background: var(--bg-dark); background-image: radial-gradient(ellipse at 50% 30%, #1a1a2e 0%, var(--bg-dark) 70%); }
+.lang-pick-grid { display: flex; flex-direction: column; gap: 14px; margin-top: 20px; }
+.lang-pick-btn { width: 240px !important; }
+
 /* ========== LANGUAGE PICKER ========== */
 .lang-picker { display: flex; justify-content: center; gap: 8px; margin-bottom: 20px; }
 .lang-btn {
@@ -73,6 +78,22 @@ html, body, #root {
 }
 .lang-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(245,158,11,0.1); }
 .lang-btn:hover { border-color: var(--text); color: var(--text); }
+
+/* ========== DIFFICULTY PICKER ========== */
+.difficulty-picker { margin: 8px 0 18px; }
+.difficulty-label { display: block; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.15em; color: var(--text-dim); text-transform: uppercase; margin-bottom: 6px; }
+.difficulty-row { display: flex; justify-content: center; gap: 8px; }
+.diff-btn {
+  padding: 6px 14px; border-radius: 8px; border: 2px solid var(--text-dim);
+  background: transparent; color: var(--text-dim); font-family: 'Inter', sans-serif;
+  font-size: 0.85rem; font-weight: 600; cursor: pointer; transition: all 0.2s;
+}
+.diff-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(245,158,11,0.1); }
+.diff-btn:hover { border-color: var(--text); color: var(--text); }
+
+/* ========== MODE GRID ========== */
+.mode-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
+.mode-grid .btn-primary { width: 100%; margin: 0; padding: 12px 10px; font-size: 1rem; }
 
 /* ========== HIGH SCORE ========== */
 .high-score-display { margin-top: 30px; display: flex; flex-direction: column; gap: 4px; color: var(--text-dim); font-size: 0.9rem; }
@@ -104,10 +125,16 @@ html, body, #root {
 .user-badge a:hover { color: var(--danger); }
 
 /* ========== GAME ========== */
-#game-screen { background: var(--bg-dark); }
+/* Fixed playfield: bucket geometry and physics match across all screens.
+   The container is locked at 480x850; we letterbox-scale on the wrapper. */
+#game-screen { background: var(--bg-dark); display: flex; align-items: center; justify-content: center; padding: 0; }
+#game-fit {
+  width: 100vw; height: 100vh; display: flex; align-items: center; justify-content: center; overflow: hidden;
+}
 #game-container {
-  position: relative; width: 100vw; max-width: 480px; height: 100vh; max-height: 850px;
-  margin: 0 auto; overflow: hidden; display: flex; flex-direction: column;
+  position: relative; width: 480px; height: 850px; flex-shrink: 0;
+  overflow: hidden; display: flex; flex-direction: column;
+  transform-origin: center center;
 }
 #score-bar {
   display: flex; align-items: center; justify-content: space-between;
@@ -124,6 +151,13 @@ html, body, #root {
 #current-word-display.valid-prefix { color: var(--success); }
 #current-word-display.invalid-prefix { color: var(--danger); }
 
+/* Duel scoreboard */
+.duel-bar { padding: 10px 14px; }
+.duel-side { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 60px; }
+.duel-side span:last-child { font-family: 'Russo One', sans-serif; font-size: 1.4rem; }
+.duel-side.p1 span:last-child { color: var(--accent); }
+.duel-side.p2 span:last-child { color: #22d3ee; }
+
 /* Combo display */
 .combo-display {
   font-family: 'Russo One', sans-serif; font-size: 0.85rem; color: #ffd700;
@@ -134,6 +168,50 @@ html, body, #root {
   flex: 1; display: block; min-height: 0;
   touch-action: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent;
 }
+
+/* ========== GAUGE + POWER-UPS ========== */
+#gauge-bar {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 12px; background: var(--bg-card); border-top: 1px solid #1e293b;
+  flex-shrink: 0; z-index: 5;
+}
+.gauge-track {
+  position: relative; flex: 1; height: 18px; background: #0a0a0f;
+  border: 1px solid #334155; border-radius: 10px; overflow: hidden;
+}
+.gauge-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #22c55e 0%, #f59e0b 60%, #ef4444 100%);
+  transition: width 0.3s ease-out;
+}
+.gauge-label {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  font-family: 'Russo One', sans-serif; font-size: 0.7rem; color: var(--text);
+  text-shadow: 0 0 4px #000;
+}
+.power-buttons { display: flex; gap: 6px; }
+.power-btn {
+  display: flex; align-items: center; gap: 4px;
+  padding: 6px 10px; min-width: 56px; height: 32px;
+  font-family: 'Russo One', sans-serif; font-size: 0.85rem; font-weight: 700;
+  color: var(--text-dim); background: #0a0a0f; border: 2px solid var(--text-dim);
+  border-radius: 8px; cursor: not-allowed; transition: all 0.15s;
+}
+.power-btn.ready {
+  color: var(--bg-dark); background: var(--accent); border-color: var(--accent);
+  box-shadow: 0 0 12px var(--accent-glow); cursor: pointer;
+}
+.power-btn.ready:hover { transform: scale(1.05); }
+.power-btn.armed {
+  color: #fff; background: #ff5577; border-color: #ff5577;
+  box-shadow: 0 0 16px #ff5577;
+  animation: laser-pulse 0.7s ease-in-out infinite;
+}
+@keyframes laser-pulse {
+  0%, 100% { box-shadow: 0 0 12px #ff5577; }
+  50% { box-shadow: 0 0 24px #ff5577, 0 0 32px #ff77aa; }
+}
+.power-btn .power-cost { font-size: 0.65rem; opacity: 0.85; }
 
 /* ========== GAME OVER ========== */
 #gameover-screen { background: rgba(10, 10, 15, 0.92); backdrop-filter: blur(8px); }

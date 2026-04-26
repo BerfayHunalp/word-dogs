@@ -7,6 +7,7 @@ import { getLangConfig } from '../i18n';
 let wordSet: Set<string> | null = null;
 let prefixSet2: Set<string> | null = null;
 let prefixSet3: Set<string> | null = null;
+let wordsByLength: Map<number, string[]> = new Map();
 let loadedLang = '';
 
 function normalize(word: string): string {
@@ -17,6 +18,7 @@ function buildSets(words: string[]) {
   wordSet = new Set();
   prefixSet2 = new Set();
   prefixSet3 = new Set();
+  wordsByLength = new Map();
 
   for (const raw of words) {
     const w = normalize(raw);
@@ -24,8 +26,23 @@ function buildSets(words: string[]) {
     wordSet.add(w);
     if (w.length >= 2) prefixSet2.add(w.slice(0, 2));
     if (w.length >= 3) prefixSet3.add(w.slice(0, 3));
+    let bucket = wordsByLength.get(w.length);
+    if (!bucket) { bucket = []; wordsByLength.set(w.length, bucket); }
+    bucket.push(w);
   }
   console.log(`Dictionary loaded: ${wordSet.size} words`);
+}
+
+// Bots: pull a random valid word in a length range, or null if none available.
+export function getRandomWordOfLength(minLen: number, maxLen: number): string | null {
+  const candidates: string[][] = [];
+  for (let l = minLen; l <= maxLen; l++) {
+    const bucket = wordsByLength.get(l);
+    if (bucket && bucket.length > 0) candidates.push(bucket);
+  }
+  if (candidates.length === 0) return null;
+  const bucket = candidates[Math.floor(Math.random() * candidates.length)];
+  return bucket[Math.floor(Math.random() * bucket.length)];
 }
 
 export async function loadDictionary(): Promise<boolean> {

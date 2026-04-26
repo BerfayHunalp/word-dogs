@@ -17,7 +17,8 @@ export function calculateWordScore(path: Ball[], comboCount: number): number {
   let hasDoublePowerUp = false;
 
   for (const ball of path) {
-    let pts = getLetterPoints(ball.letter);
+    // Wildcards score 0 (Scrabble blank rule)
+    let pts = ball.wildcard ? 0 : getLetterPoints(ball.letter);
     if (ball.special === '2x') pts *= 2;
     else if (ball.special === '3x') pts *= 3;
     if (ball.powerUp === 'double') hasDoublePowerUp = true;

@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import MenuScreen from '../../components/MenuScreen';
 
-// Mock the imports MenuScreen uses
 vi.mock('../../api/client', () => ({
   isLoggedIn: vi.fn(() => false),
   getUser: vi.fn(() => null),
@@ -15,12 +14,13 @@ vi.mock('../../game/engine', () => ({
 
 describe('MenuScreen', () => {
   const defaultProps = {
-    onPlay: vi.fn(),
+    onModeSelect: vi.fn(),
     onProfile: vi.fn(),
-    onMultiplayer: vi.fn(),
     onLogout: vi.fn(),
     lang: 'fr',
     onLangChange: vi.fn(),
+    difficulty: 'normal' as const,
+    onDifficultyChange: vi.fn(),
   };
 
   beforeEach(() => {
@@ -32,34 +32,36 @@ describe('MenuScreen', () => {
     expect(screen.getByText('WARDOGS')).toBeInTheDocument();
   });
 
-  it('renders play button', () => {
+  it('renders solo mode button', () => {
     render(<MenuScreen {...defaultProps} />);
-    const playBtn = screen.getByText('JOUER');
-    expect(playBtn).toBeInTheDocument();
+    expect(screen.getByText('SOLO')).toBeInTheDocument();
   });
 
-  it('calls onPlay when play button clicked', () => {
-    const onPlay = vi.fn();
-    render(<MenuScreen {...defaultProps} onPlay={onPlay} />);
-    fireEvent.click(screen.getByText('JOUER'));
-    expect(onPlay).toHaveBeenCalledOnce();
+  it('calls onModeSelect with solo when solo clicked', () => {
+    const onModeSelect = vi.fn();
+    render(<MenuScreen {...defaultProps} onModeSelect={onModeSelect} />);
+    fireEvent.click(screen.getByText('SOLO'));
+    expect(onModeSelect).toHaveBeenCalledWith('solo');
   });
 
-  it('renders multiplayer button', () => {
+  it('renders all four mode buttons', () => {
     render(<MenuScreen {...defaultProps} />);
-    expect(screen.getByText('MULTIJOUEUR')).toBeInTheDocument();
+    expect(screen.getByText('SOLO')).toBeInTheDocument();
+    expect(screen.getByText('CONTRE IA')).toBeInTheDocument();
+    expect(screen.getByText('DUEL LOCAL')).toBeInTheDocument();
+    expect(screen.getByText('EN LIGNE')).toBeInTheDocument();
   });
 
-  it('calls onMultiplayer when multiplayer clicked', () => {
-    const onMultiplayer = vi.fn();
-    render(<MenuScreen {...defaultProps} onMultiplayer={onMultiplayer} />);
-    fireEvent.click(screen.getByText('MULTIJOUEUR'));
-    expect(onMultiplayer).toHaveBeenCalledOnce();
+  it('calls onModeSelect("online") when EN LIGNE clicked', () => {
+    const onModeSelect = vi.fn();
+    render(<MenuScreen {...defaultProps} onModeSelect={onModeSelect} />);
+    fireEvent.click(screen.getByText('EN LIGNE'));
+    expect(onModeSelect).toHaveBeenCalledWith('online');
   });
 
   it('renders language picker with both languages', () => {
     render(<MenuScreen {...defaultProps} />);
-    expect(screen.getByText('Fran\u00e7ais')).toBeInTheDocument();
+    expect(screen.getByText('Français')).toBeInTheDocument();
     expect(screen.getByText('English')).toBeInTheDocument();
   });
 
@@ -68,6 +70,20 @@ describe('MenuScreen', () => {
     render(<MenuScreen {...defaultProps} onLangChange={onLangChange} />);
     fireEvent.click(screen.getByText('English'));
     expect(onLangChange).toHaveBeenCalledWith('en');
+  });
+
+  it('renders difficulty picker', () => {
+    render(<MenuScreen {...defaultProps} />);
+    expect(screen.getByText('Facile')).toBeInTheDocument();
+    expect(screen.getByText('Normal')).toBeInTheDocument();
+    expect(screen.getByText('Difficile')).toBeInTheDocument();
+  });
+
+  it('calls onDifficultyChange when difficulty button clicked', () => {
+    const onDifficultyChange = vi.fn();
+    render(<MenuScreen {...defaultProps} onDifficultyChange={onDifficultyChange} />);
+    fireEvent.click(screen.getByText('Difficile'));
+    expect(onDifficultyChange).toHaveBeenCalledWith('hard');
   });
 
   it('displays high score', () => {

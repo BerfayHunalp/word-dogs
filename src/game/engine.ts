@@ -5,7 +5,7 @@
 
 import Matter from 'matter-js';
 import { getRandomLetter, resetLetterHistory, getRandomBallRadius } from './letter';
-import { initInput, destroyInput, getSelectedPath, clearSelection } from './input';
+import { initInput, destroyInput, getSelectedPath, getActivePaths, clearSelection, armLaser, isLaserArmed, getLaserLine } from './input';
 import { isWord, isValidPrefix } from './dictionary';
 import { getLetterPoints, calculateWordScore } from './scoring';
 import { SeededRng } from './seededRng';
@@ -13,7 +13,7 @@ import { getLangConfig } from '../i18n';
 import type {
   Ball, BucketGeometry, GameCallbacks, GameStats,
   Particle, FloatingText, PowerUpType, ReplayFrame, ReplayData,
-  InterferenceEffect,
+  InterferenceEffect, Difficulty,
 } from './types';
 
 const { Engine, Bodies, Composite, Vector } = Matter;
@@ -82,6 +82,44 @@ let doubleScoreTimer: ReturnType<typeof setTimeout> | null = null;
 // Interference effects from multiplayer opponent
 let interferences: InterferenceEffect[] = [];
 
+// Gauge: filled by 4+ letter words, spent on power-ups
+const GAUGE_MAX = 100;
+const POWER_COST_WILDCARD = 25;
+const POWER_COST_BARRAGE = 60;
+const POWER_COST_LASER = 40;
+
+// Shiny balls: bonus targets that pay extra when popped during their glow window.
+const SHINY_DURATION_MS = 4500;
+const SHINY_INTERVAL_MIN = 6000;
+const SHINY_INTERVAL_MAX = 11000;
+let shinyTimer: ReturnType<typeof setTimeout> | null = null;
+let gauge = 0;
+let onGaugeUpdateCb: ((g: number, max: number) => void) | null = null;
+
+// Opponent score (online multiplayer / AI)
+let opponentScore = 0;
+
+// Local duel: P1 + P2 scores tracked separately when multiTouchMode is true
+let multiTouchMode = false;
+let p1Score = 0;
+let p2Score = 0;
+let p1Words = 0;
+let p2Words = 0;
+let onDuelScoreCb: ((p1: number, p2: number) => void) | null = null;
+export function setMultiTouchMode(on: boolean) { multiTouchMode = on; }
+export function getDuelScores() { return { p1: p1Score, p2: p2Score, p1Words, p2Words }; }
+export function setDuelScoreCallback(cb: (p1: number, p2: number) => void) { onDuelScoreCb = cb; }
+
+// Difficulty: multiplies the base spawn interval. <1 = faster, >1 = slower.
+const DIFFICULTY_MULT: Record<Difficulty, number> = {
+  easy: 1.6,    // calmer drops, more thinking time
+  normal: 1.0,  // baseline
+  hard: 0.55,   // rapid-fire
+};
+let difficulty: Difficulty = 'normal';
+export function setDifficulty(d: Difficulty) { difficulty = d; }
+export function getDifficulty(): Difficulty { return difficulty; }
+
 // Balls, bucket, effects
 let balls: Ball[] = [];
 let ballIdCounter = 0;
@@ -111,7 +149,17 @@ let comboEl: HTMLElement | null = null;
 export function initGame(callbacks: GameCallbacks) {
   onGameOverCb = callbacks.onGameOver;
   onScoreUpdateCb = callbacks.onScoreUpdate;
+  onGaugeUpdateCb = callbacks.onGaugeUpdate ?? null;
 }
+
+export function getGauge(): number { return gauge; }
+export function getGaugeMax(): number { return GAUGE_MAX; }
+export function getPowerCosts() {
+  return { wildcard: POWER_COST_WILDCARD, barrage: POWER_COST_BARRAGE, laser: POWER_COST_LASER };
+}
+export function isLaserActive(): boolean { return isLaserArmed(); }
+export function getOpponentScore(): number { return opponentScore; }
+export function setOpponentScore(s: number) { opponentScore = s; }
 
 export function setMultiplayerCallback(cb: (type: string) => void) {
   onSendInterference = cb;
@@ -129,6 +177,10 @@ export function startGame(seedOverride?: number) {
   slowMoFactor = 1;
   activeSlowDown = false; activeDoubleScore = false;
   interferences = [];
+  gauge = 0; opponentScore = 0;
+  p1Score = 0; p2Score = 0; p1Words = 0; p2Words = 0;
+  notifyGauge();
+  notifyDuelScores();
   replayFrames = []; gameStartTime = performance.now();
 
   rng = new SeededRng(seedOverride);
@@ -151,11 +203,13 @@ export function startGame(seedOverride?: number) {
     onWordSubmit: handleWordSubmit,
     wordDisplay: document.getElementById('current-word-display'),
     isValidPrefix,
+    multiTouch: multiTouchMode,
   });
 
   updateScoreDisplay();
   animFrame = requestAnimationFrame(gameLoop);
   scheduleNextSpawn();
+  scheduleNextShiny();
 }
 
 export function stopGame() {
@@ -166,6 +220,7 @@ export function stopGame() {
   if (slowMoTimer) { clearTimeout(slowMoTimer); slowMoTimer = null; }
   if (slowDownTimer) { clearTimeout(slowDownTimer); slowDownTimer = null; }
   if (doubleScoreTimer) { clearTimeout(doubleScoreTimer); doubleScoreTimer = null; }
+  if (shinyTimer) { clearTimeout(shinyTimer); shinyTimer = null; }
   destroyInput();
   if (engine) { Composite.clear(engine.world, false); Engine.clear(engine); engine = null; }
   balls = []; particles = []; floatingTexts = [];
@@ -246,9 +301,9 @@ function areTouching(a: Ball, b: Ball): boolean {
   return Math.sqrt(dx * dx + dy * dy) <= a.radius + b.radius + 5;
 }
 
-function spawnBall(forceLarge = false) {
+function spawnBall(forceLarge = false, opts: { wildcard?: boolean } = {}) {
   if (!gameActive || spawnPaused) return;
-  const letter = getRandomLetter(rng);
+  const letter = opts.wildcard ? '*' : getRandomLetter(rng);
   let radius = getRandomBallRadius(rng, level);
   if (forceLarge) radius = 28 + rng.next() * 8; // Interference: big ball
 
@@ -264,24 +319,25 @@ function spawnBall(forceLarge = false) {
   });
   Composite.add(engine!.world, body);
 
-  // Special type
+  // Wildcards never carry special multipliers or other power-ups
   let special: Ball['special'] = null;
-  const r = rng.next();
-  if (r < 0.02) special = '3x';
-  else if (r < 0.07) special = '2x';
-
-  // Power-up type (rare)
   let powerUp: PowerUpType = null;
-  const p = rng.next();
-  if (p < 0.01) powerUp = 'bomb';
-  else if (p < 0.025) powerUp = 'slow';
-  else if (p < 0.04) powerUp = 'remove';
-  else if (p < 0.055) powerUp = 'double';
+  if (!opts.wildcard) {
+    const r = rng.next();
+    if (r < 0.02) special = '3x';
+    else if (r < 0.07) special = '2x';
 
-  const ball: Ball = { id: ballIdCounter++, body, letter, radius, special, popping: 0, powerUp };
+    const p = rng.next();
+    if (p < 0.01) powerUp = 'bomb';
+    else if (p < 0.025) powerUp = 'slow';
+    else if (p < 0.04) powerUp = 'remove';
+    else if (p < 0.055) powerUp = 'double';
+  }
+
+  const ball: Ball = { id: ballIdCounter++, body, letter, radius, special, popping: 0, powerUp, wildcard: opts.wildcard };
   balls.push(ball);
 
-  replayFrames.push({ time: performance.now() - gameStartTime, action: 'spawn', data: { letter, radius, x, special, powerUp } });
+  replayFrames.push({ time: performance.now() - gameStartTime, action: 'spawn', data: { letter, radius, x, special, powerUp, wildcard: !!opts.wildcard } });
 }
 
 function popBalls(ballsToRemove: Ball[]) {
@@ -315,11 +371,13 @@ function updateBalls() {
 
 function getSpawnInterval(): number {
   let interval = Math.max(800, 2500 - (level - 1) * 120);
+  // Difficulty scales the whole spawn cadence
+  interval *= DIFFICULTY_MULT[difficulty];
   // Interference: speed up
   if (interferences.some(e => e.type === 'speedUp')) interval *= 0.6;
   // Power-up: slow down
   if (activeSlowDown) interval *= 1.5;
-  return interval;
+  return Math.max(300, interval);
 }
 
 function scheduleNextSpawn() {
@@ -331,6 +389,101 @@ function pauseSpawning(ms: number) {
   spawnPaused = true;
   if (spawnTimer) clearTimeout(spawnTimer);
   setTimeout(() => { if (!gameActive) return; spawnPaused = false; scheduleNextSpawn(); }, ms);
+}
+
+// ===================== GAUGE-DRIVEN POWER-UPS =====================
+
+function notifyGauge() {
+  if (onGaugeUpdateCb) onGaugeUpdateCb(gauge, GAUGE_MAX);
+}
+
+// Power-up 1: spend gauge to spawn a wildcard ball (no fixed letter — picks best on submit).
+export function castWildcardBall(): boolean {
+  if (!gameActive) return false;
+  if (gauge < POWER_COST_WILDCARD) return false;
+  gauge -= POWER_COST_WILDCARD;
+  notifyGauge();
+  // Force-spawn even if spawnPaused
+  const wasPaused = spawnPaused; spawnPaused = false;
+  spawnBall(false, { wildcard: true });
+  spawnPaused = wasPaused;
+  addFloatingText(W / 2, H * 0.18, 'WILDCARD!', COLORS.accent, 22);
+  return true;
+}
+
+// Power-up 2: spend gauge to send 5 interference balls to opponent (multiplayer only).
+export function castBarrage(): boolean {
+  if (!gameActive) return false;
+  if (gauge < POWER_COST_BARRAGE) return false;
+  if (!onSendInterference) return false;
+  gauge -= POWER_COST_BARRAGE;
+  notifyGauge();
+  for (let i = 0; i < 5; i++) {
+    setTimeout(() => onSendInterference?.('bigBall'), i * 120);
+  }
+  addFloatingText(W / 2, H * 0.18, 'BARRAGE x5!', COLORS.danger, 22);
+  return true;
+}
+
+// Power-up 3: arm a one-shot laser. The next pointer slash pops every ball it crosses.
+export function castLaser(): boolean {
+  if (!gameActive) return false;
+  if (gauge < POWER_COST_LASER) return false;
+  if (isLaserArmed()) return false;
+  gauge -= POWER_COST_LASER;
+  notifyGauge();
+  armLaser((start, end) => fireLaser(start, end));
+  addFloatingText(W / 2, H * 0.18, 'LASER!', '#ff5577', 22);
+  return true;
+}
+
+// Distance from a point to a line segment (for laser hit detection)
+function pointSegmentDistance(px: number, py: number, ax: number, ay: number, bx: number, by: number): number {
+  const dx = bx - ax, dy = by - ay;
+  const lenSq = dx * dx + dy * dy;
+  if (lenSq === 0) return Math.hypot(px - ax, py - ay);
+  let t = ((px - ax) * dx + (py - ay) * dy) / lenSq;
+  t = Math.max(0, Math.min(1, t));
+  const cx = ax + t * dx, cy = ay + t * dy;
+  return Math.hypot(px - cx, py - cy);
+}
+
+function fireLaser(start: { x: number; y: number }, end: { x: number; y: number }) {
+  if (!gameActive) return;
+  // Reject taps with no slash distance
+  if (Math.hypot(end.x - start.x, end.y - start.y) < 8) return;
+
+  const hits: Ball[] = [];
+  for (const ball of balls) {
+    if (ball.popping > 0) continue;
+    const d = pointSegmentDistance(ball.body.position.x, ball.body.position.y,
+      start.x, start.y, end.x, end.y);
+    if (d <= ball.radius) hits.push(ball);
+  }
+
+  if (hits.length > 0) {
+    popBalls(hits);
+    addFloatingText((start.x + end.x) / 2, (start.y + end.y) / 2 - 20,
+      `LASER x${hits.length}`, '#ff5577', 22);
+  }
+
+  // Replay frame for the laser shot
+  replayFrames.push({ time: performance.now() - gameStartTime, action: 'powerup', data: { type: 'laser', hits: hits.length } });
+}
+
+// ===================== SHINY BALLS =====================
+
+function scheduleNextShiny() {
+  if (!gameActive) return;
+  const wait = SHINY_INTERVAL_MIN + Math.random() * (SHINY_INTERVAL_MAX - SHINY_INTERVAL_MIN);
+  shinyTimer = setTimeout(() => { triggerShiny(); scheduleNextShiny(); }, wait);
+}
+
+function triggerShiny() {
+  const candidates = balls.filter(b => b.popping === 0 && !(b.glowEndsAt && b.glowEndsAt > performance.now()));
+  if (candidates.length === 0) return;
+  const ball = candidates[Math.floor(Math.random() * candidates.length)];
+  ball.glowEndsAt = performance.now() + SHINY_DURATION_MS;
 }
 
 // ===================== POWER-UP ACTIVATION =====================
@@ -366,10 +519,46 @@ function activatePowerUp(type: PowerUpType) {
 
 // ===================== WORD SUBMISSION =====================
 
-function handleWordSubmit(word: string, path: Ball[]) {
+function notifyDuelScores() {
+  if (onDuelScoreCb) onDuelScoreCb(p1Score, p2Score);
+}
+
+function handleWordSubmit(word: string, path: Ball[], player: 1 | 2 = 1) {
   if (!gameActive) { clearSelection(); return; }
-  const normalized = word.toLowerCase();
+  let normalized = word.toLowerCase();
   if (normalized.length < 3) { clearSelection(); return; }
+
+  // Wildcard resolution: if path contains '*' balls, brute-force letters and pick best valid word.
+  const wildIndices: number[] = [];
+  for (let i = 0; i < path.length; i++) if (path[i].wildcard) wildIndices.push(i);
+  if (wildIndices.length > 0) {
+    const ALPHA = 'abcdefghijklmnopqrstuvwxyz';
+    const baseChars = path.map(b => b.letter.toLowerCase());
+    let bestWord = '';
+    let bestPoints = -1;
+    let bestAssignment: string[] = [];
+    const tryAll = (idx: number, current: string[]) => {
+      if (idx === wildIndices.length) {
+        const assigned = baseChars.slice();
+        for (let i = 0; i < wildIndices.length; i++) assigned[wildIndices[i]] = current[i];
+        const candidate = assigned.join('');
+        if (isWord(candidate)) {
+          const tempPath = path.map((b, i) =>
+            wildIndices.includes(i) ? { ...b, letter: assigned[i].toUpperCase() } : b
+          );
+          const pts = calculateWordScore(tempPath, comboCount);
+          if (pts > bestPoints) { bestPoints = pts; bestWord = candidate; bestAssignment = assigned; }
+        }
+        return;
+      }
+      for (const ch of ALPHA) tryAll(idx + 1, [...current, ch]);
+    };
+    tryAll(0, []);
+    if (!bestWord) { clearSelection(); return; }
+    normalized = bestWord;
+    // Mutate the path so scoring + display reflect the chosen letters
+    for (let i = 0; i < path.length; i++) path[i].letter = bestAssignment[i].toUpperCase();
+  }
 
   if (isWord(normalized)) {
     // Check for power-ups in the path
@@ -378,8 +567,22 @@ function handleWordSubmit(word: string, path: Ball[]) {
     }
 
     const points = calculateWordScore(path, comboCount);
-    const finalPoints = activeDoubleScore ? points * 2 : points;
-    score += finalPoints;
+    // Shiny bonus: each ball popped while glowing adds +50% multiplier (compounds).
+    const now = performance.now();
+    let shinyCount = 0;
+    for (const b of path) if (b.glowEndsAt && b.glowEndsAt > now) shinyCount++;
+    const shinyMult = 1 + 0.5 * shinyCount;
+    const finalPoints = Math.round((activeDoubleScore ? points * 2 : points) * shinyMult);
+    if (multiTouchMode) {
+      // In duel mode, credit the player whose finger formed the word.
+      if (player === 2) { p2Score += finalPoints; p2Words++; }
+      else { p1Score += finalPoints; p1Words++; }
+      notifyDuelScores();
+      // Keep `score` as the winning side's score for HUD purposes
+      score = Math.max(p1Score, p2Score);
+    } else {
+      score += finalPoints;
+    }
     wordsFound++;
     if (finalPoints > bestWord.score) bestWord = { word: normalized, score: finalPoints };
 
@@ -399,12 +602,20 @@ function handleWordSubmit(word: string, path: Ball[]) {
     addFloatingText(avgX, avgY - 20, `+${finalPoints}`, COLORS.success, 24);
     addFloatingText(avgX, avgY - 55, normalized.toUpperCase(), COLORS.accent, 16);
     if (comboCount > 1) addFloatingText(avgX, avgY - 85, `COMBO x${comboCount}`, COLORS.comboGold, 18);
+    if (shinyCount > 0) addFloatingText(avgX, avgY - 110, `SHINY x${shinyCount}!`, '#ff77ff', 18);
 
     // Multiplayer: send interference on 5+ letter words
     if (onSendInterference && normalized.length >= 5) {
       if (normalized.length >= 7) onSendInterference('scramble');
       else if (normalized.length >= 6) onSendInterference('speedUp');
       else onSendInterference('bigBall');
+    }
+
+    // Gauge fill: words of 4+ letters fill the gauge proportionally to length.
+    if (normalized.length >= 4) {
+      const gain = (normalized.length - 3) * 6; // 4=>6, 5=>12, 6=>18, 7=>24, 8=>30
+      gauge = Math.min(GAUGE_MAX, gauge + gain);
+      notifyGauge();
     }
 
     popBalls(path);
@@ -493,8 +704,24 @@ function triggerGameOver() {
 function render() {
   ctx!.clearRect(0, 0, W, H);
   drawBackground(); drawBucketInterior(); drawBalls();
-  drawSelectionPath(); drawBucketWalls(); drawOverflowWarning();
+  drawSelectionPath(); drawLaserPreview(); drawBucketWalls(); drawOverflowWarning();
   drawActiveEffects(); drawParticlesLayer(); drawFloatingTextsLayer();
+}
+
+function drawLaserPreview() {
+  const line = getLaserLine();
+  if (!line) return;
+  ctx!.save();
+  ctx!.shadowColor = '#ff5577';
+  ctx!.shadowBlur = 16;
+  ctx!.strokeStyle = '#ff5577';
+  ctx!.lineWidth = 4;
+  ctx!.lineCap = 'round';
+  ctx!.beginPath();
+  ctx!.moveTo(line.start.x, line.start.y);
+  ctx!.lineTo(line.end.x, line.end.y);
+  ctx!.stroke();
+  ctx!.restore();
 }
 
 function drawBackground() { ctx!.fillStyle = COLORS.bg; ctx!.fillRect(0, 0, W, H); }
@@ -511,7 +738,13 @@ function drawBucketInterior() {
 }
 
 function drawBalls() {
-  const sel = new Set(getSelectedPath().map(b => b.id));
+  // In duel mode, mark every ball claimed by any active path as "selected"
+  const sel = new Set<number>();
+  if (multiTouchMode) {
+    for (const p of getActivePaths()) for (const b of p.balls) sel.add(b.id);
+  } else {
+    for (const b of getSelectedPath()) sel.add(b.id);
+  }
   for (const ball of balls) {
     if (ball.popping > 0) { drawPoppingBall(ball); continue; }
     const { x, y } = ball.body.position;
@@ -524,15 +757,26 @@ function drawBalls() {
       ctx!.fillStyle = 'rgba(245,158,11,0.12)'; ctx!.fill(); ctx!.restore();
     }
 
-    if (ball.special || ball.powerUp) {
+    const nowMs = performance.now();
+    const isShiny = !!(ball.glowEndsAt && ball.glowEndsAt > nowMs);
+    if (ball.special || ball.powerUp || ball.wildcard || isShiny) {
       ctx!.save();
-      ctx!.shadowColor = ball.powerUp ? getPowerColor(ball.powerUp) : (ball.special === '3x' ? COLORS.special3x : COLORS.special2x);
-      ctx!.shadowBlur = 8;
+      if (isShiny) {
+        const pulse = 10 + 8 * Math.sin(nowMs / 120);
+        ctx!.shadowColor = '#ff77ff';
+        ctx!.shadowBlur = pulse;
+      } else {
+        ctx!.shadowColor = ball.wildcard
+          ? '#22d3ee'
+          : ball.powerUp ? getPowerColor(ball.powerUp) : (ball.special === '3x' ? COLORS.special3x : COLORS.special2x);
+        ctx!.shadowBlur = ball.wildcard ? 14 : 8;
+      }
     }
 
     ctx!.beginPath(); ctx!.arc(x, y, r, 0, Math.PI * 2);
     let gL: string, gD: string, border: string;
     if (isSel) { gL = COLORS.selectedLight; gD = COLORS.selectedFill; border = COLORS.selectedGlow; }
+    else if (ball.wildcard) { gL = '#22d3ee'; gD = '#0e4f5c'; border = '#67e8f9'; }
     else if (ball.powerUp) { const c = getPowerColors(ball.powerUp); gL = c[0]; gD = c[1]; border = c[2]; }
     else if (ball.special === '2x') { gL = '#2563eb'; gD = COLORS.special2xDark; border = COLORS.special2x; }
     else if (ball.special === '3x') { gL = '#7c3aed'; gD = COLORS.special3xDark; border = COLORS.special3x; }
@@ -543,7 +787,7 @@ function drawBalls() {
     ctx!.fillStyle = grad; ctx!.fill();
     ctx!.strokeStyle = border; ctx!.lineWidth = isSel ? 3 : 2; ctx!.stroke();
 
-    if (ball.special || ball.powerUp) ctx!.restore();
+    if (ball.special || ball.powerUp || ball.wildcard || isShiny) ctx!.restore();
 
     // Letter
     ctx!.fillStyle = isSel ? '#fff' : COLORS.text;
@@ -587,6 +831,18 @@ function drawPoppingBall(ball: Ball) {
 }
 
 function drawSelectionPath() {
+  if (multiTouchMode) {
+    const paths = getActivePaths();
+    for (const p of paths) {
+      if (p.balls.length < 2) continue;
+      ctx!.beginPath();
+      ctx!.moveTo(p.balls[0].body.position.x, p.balls[0].body.position.y);
+      for (let i = 1; i < p.balls.length; i++) ctx!.lineTo(p.balls[i].body.position.x, p.balls[i].body.position.y);
+      ctx!.strokeStyle = p.player === 2 ? 'rgba(34,211,238,0.6)' : 'rgba(245,158,11,0.6)';
+      ctx!.lineWidth = 5; ctx!.lineCap = 'round'; ctx!.lineJoin = 'round'; ctx!.stroke();
+    }
+    return;
+  }
   const path = getSelectedPath();
   if (path.length < 2) return;
   ctx!.beginPath();

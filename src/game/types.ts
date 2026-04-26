@@ -13,10 +13,14 @@ export interface Ball {
   special: SpecialType;
   popping: number;
   powerUp: PowerUpType;
+  wildcard?: boolean;
+  // Epoch ms — ball is "shiny" while now < glowEndsAt; popping during glow boosts score.
+  glowEndsAt?: number;
 }
 
 export type SpecialType = null | '2x' | '3x';
 export type PowerUpType = null | 'slow' | 'remove' | 'double' | 'bomb';
+export type Difficulty = 'easy' | 'normal' | 'hard';
 
 export interface Particle {
   x: number; y: number;
@@ -58,15 +62,17 @@ export interface GameStats {
 export interface GameCallbacks {
   onGameOver: (stats: GameStats) => void;
   onScoreUpdate: (score: number, level: number) => void;
+  onGaugeUpdate?: (gauge: number, max: number) => void;
 }
 
 export interface InputConfig {
   canvas: HTMLCanvasElement;
   getBalls: () => Ball[];
   areTouching: (a: Ball, b: Ball) => boolean;
-  onWordSubmit: (word: string, path: Ball[]) => void;
+  onWordSubmit: (word: string, path: Ball[], player: 1 | 2) => void;
   wordDisplay: HTMLElement | null;
   isValidPrefix: (s: string) => boolean;
+  multiTouch?: boolean;
 }
 
 // Multiplayer
