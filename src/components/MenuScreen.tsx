@@ -14,7 +14,7 @@ interface Props {
   onDifficultyChange: (d: Difficulty) => void;
 }
 
-const DIFFICULTIES: Difficulty[] = ['easy', 'normal', 'hard'];
+const DIFFICULTIES: Difficulty[] = ['egoFriendly', 'easy', 'normal', 'hard'];
 
 export default function MenuScreen({
   onModeSelect, onProfile, onLogout, lang, onLangChange, difficulty, onDifficultyChange,

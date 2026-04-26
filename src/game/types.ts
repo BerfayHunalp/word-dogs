@@ -20,7 +20,7 @@ export interface Ball {
 
 export type SpecialType = null | '2x' | '3x';
 export type PowerUpType = null | 'slow' | 'remove' | 'double' | 'bomb';
-export type Difficulty = 'easy' | 'normal' | 'hard';
+export type Difficulty = 'egoFriendly' | 'easy' | 'normal' | 'hard';
 
 export interface Particle {
   x: number; y: number;

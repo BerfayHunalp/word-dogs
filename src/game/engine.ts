@@ -111,11 +111,32 @@ export function setMultiTouchMode(on: boolean) { multiTouchMode = on; }
 export function getDuelScores() { return { p1: p1Score, p2: p2Score, p1Words, p2Words }; }
 export function setDuelScoreCallback(cb: (p1: number, p2: number) => void) { onDuelScoreCb = cb; }
 
+// Manual rush toggle (bound to a hold-button in the UI). Combines with the
+// "press on empty bucket area" detection in input.ts.
+let rushOverride = false;
+let lastRushState = false;
+export function setRushOverride(active: boolean) {
+  rushOverride = active;
+  // Re-schedule the next ball spawn so the new (shorter or longer) interval
+  // takes effect immediately rather than after the current timeout.
+  rescheduleSpawnForRush();
+}
+function isRushOn(): boolean { return rushOverride || isRushActive(); }
+function rescheduleSpawnForRush() {
+  if (!gameActive) return;
+  const now = isRushOn();
+  if (now === lastRushState) return;
+  lastRushState = now;
+  if (spawnTimer) clearTimeout(spawnTimer);
+  scheduleNextSpawn();
+}
+
 // Difficulty: multiplies the base spawn interval. <1 = faster, >1 = slower.
 const DIFFICULTY_MULT: Record<Difficulty, number> = {
-  easy: 1.6,    // calmer drops, more thinking time
-  normal: 1.0,  // baseline
-  hard: 0.55,   // rapid-fire
+  egoFriendly: 2.8, // super-easy, lots of thinking time
+  easy: 1.6,        // calmer drops
+  normal: 1.0,      // baseline
+  hard: 0.55,       // rapid-fire
 };
 let difficulty: Difficulty = 'normal';
 export function setDifficulty(d: Difficulty) { difficulty = d; }
@@ -378,7 +399,9 @@ function getSpawnInterval(): number {
   if (interferences.some(e => e.type === 'speedUp')) interval *= 0.6;
   // Power-up: slow down
   if (activeSlowDown) interval *= 1.5;
-  return Math.max(300, interval);
+  // Rush: balls fall faster AND new ones drop faster
+  if (isRushOn()) interval *= 0.35;
+  return Math.max(150, interval);
 }
 
 function scheduleNextSpawn() {
@@ -664,8 +687,10 @@ function gameLoop(timestamp: number) {
   const rawDelta = Math.min(timestamp - lastTime, 33);
   lastTime = timestamp;
 
-  // Hold-to-rush: while a finger is held on empty bucket area, gravity ramps up
-  if (engine) engine.gravity.y = isRushActive() ? GRAVITY * RUSH_GRAVITY_MULT : GRAVITY;
+  // Hold-to-rush: empty-bucket-area press OR explicit RUSH button override
+  if (engine) engine.gravity.y = isRushOn() ? GRAVITY * RUSH_GRAVITY_MULT : GRAVITY;
+  // Detect transitions from emptyHolds (touch-on-empty) and reschedule spawn
+  rescheduleSpawnForRush();
 
   // Apply slow-motion factor to physics step
   const delta = rawDelta * slowMoFactor;
@@ -903,7 +928,7 @@ function drawActiveEffects() {
     ctx!.restore();
   }
   // Rush vignette + label when the player holds the bucket
-  if (isRushActive()) {
+  if (isRushOn()) {
     ctx!.save();
     const g = ctx!.createLinearGradient(0, bucket.topY, 0, bucket.bottomY);
     g.addColorStop(0, 'rgba(239,68,68,0.18)');

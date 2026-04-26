@@ -7,7 +7,7 @@ import {
   initGame, startGame, stopGame, forceGameOver,
   castWildcardBall, castBarrage, castLaser, isLaserActive,
   getOpponentScore, setOpponentScore,
-  getPowerCosts,
+  getPowerCosts, setRushOverride,
   setMultiTouchMode, setDuelScoreCallback,
 } from '../game/engine';
 import { isLoggedIn, submitScore } from '../api/client';
@@ -220,6 +220,18 @@ export default function GameScreen({ onGameOver, seedOverride, mode }: Props) {
 
           <button className="quit-btn" onClick={handleQuit} title={t('quit')} aria-label={t('quit')}>
             ✕
+          </button>
+
+          <button
+            className="rush-btn"
+            onPointerDown={(e) => { e.preventDefault(); setRushOverride(true); }}
+            onPointerUp={() => setRushOverride(false)}
+            onPointerLeave={() => setRushOverride(false)}
+            onPointerCancel={() => setRushOverride(false)}
+            onContextMenu={(e) => e.preventDefault()}
+            aria-label="Rush"
+          >
+            ⏬ RUSH
           </button>
 
           {isOnline && (
