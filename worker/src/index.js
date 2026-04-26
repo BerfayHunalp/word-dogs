@@ -171,12 +171,28 @@ export class Matchmaker {
                 }
                 break;
 
+            case 'chat': {
+                const text = typeof msg.text === 'string' ? msg.text.trim().slice(0, 200) : '';
+                if (!text) break;
+                this.relayToOpponent(conn, {
+                    type: 'chat',
+                    text,
+                    from: conn.username,
+                    ts: Date.now(),
+                });
+                break;
+            }
+
             default:
                 console.log('Unknown message type:', msg.type);
         }
     }
 
     matchPlayer(conn) {
+        // Don't match a player against themselves (e.g. duplicate findMatch).
+        if (this.waitingPlayer && this.waitingPlayer.playerId === conn.playerId) {
+            return;
+        }
         if (this.waitingPlayer && this.waitingPlayer.ws.readyState === 1) {
             // Match found! Create a room
             const roomId = crypto.randomUUID();

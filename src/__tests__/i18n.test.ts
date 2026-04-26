@@ -30,7 +30,7 @@ describe('i18n', () => {
   describe('t (translations)', () => {
     it('returns French translations by default', () => {
       expect(t('play')).toBe('JOUER');
-      expect(t('title')).toBe('WARDOGS');
+      expect(t('title')).toBe('WORD DOGS');
       expect(t('gameOver')).toBe('GAME OVER');
     });
 

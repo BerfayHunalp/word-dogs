@@ -5,7 +5,7 @@ import SplashScreen from '../../components/SplashScreen';
 describe('SplashScreen', () => {
   it('renders the title', () => {
     render(<SplashScreen />);
-    expect(screen.getByText('WARDOGS')).toBeInTheDocument();
+    expect(screen.getByText('WORD DOGS')).toBeInTheDocument();
   });
 
   it('renders the logo', () => {

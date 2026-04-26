@@ -50,7 +50,7 @@ export const LANGUAGES: Record<string, LanguageConfig> = {
 
 const translations: Record<string, Record<string, string>> = {
   fr: {
-    title: 'WARDOGS',
+    title: 'WORD DOGS',
     subtitle: 'Forge des mots. Domine le seau.',
     play: 'JOUER',
     retry: 'REJOUER',
@@ -106,9 +106,12 @@ const translations: Record<string, Record<string, string>> = {
     modeOnline: 'EN LIGNE',
     p1: 'J1', p2: 'J2',
     aiLabel: 'IA',
+    quit: 'QUITTER',
+    quitConfirm: 'Quitter la partie ?',
+    pawSlash: 'Coup de patte',
   },
   en: {
-    title: 'WARDOGS',
+    title: 'WORD DOGS',
     subtitle: 'Forge words. Dominate the bucket.',
     play: 'PLAY',
     retry: 'RETRY',
@@ -164,6 +167,9 @@ const translations: Record<string, Record<string, string>> = {
     modeOnline: 'ONLINE',
     p1: 'P1', p2: 'P2',
     aiLabel: 'AI',
+    quit: 'QUIT',
+    quitConfirm: 'Quit the game?',
+    pawSlash: 'Paw slash',
   },
 };
 

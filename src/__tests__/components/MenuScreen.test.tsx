@@ -29,7 +29,7 @@ describe('MenuScreen', () => {
 
   it('renders title and subtitle', () => {
     render(<MenuScreen {...defaultProps} />);
-    expect(screen.getByText('WARDOGS')).toBeInTheDocument();
+    expect(screen.getByText('WORD DOGS')).toBeInTheDocument();
   });
 
   it('renders solo mode button', () => {

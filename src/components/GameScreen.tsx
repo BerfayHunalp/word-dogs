@@ -4,14 +4,22 @@
 
 import { useEffect, useRef, useState } from 'react';
 import {
-  initGame, startGame, stopGame,
+  initGame, startGame, stopGame, forceGameOver,
   castWildcardBall, castBarrage, castLaser, isLaserActive,
   getOpponentScore, setOpponentScore,
   getPowerCosts,
   setMultiTouchMode, setDuelScoreCallback,
 } from '../game/engine';
 import { isLoggedIn, submitScore } from '../api/client';
-import { sendInterference as mpSendInterference } from '../multiplayer/client';
+import {
+  sendInterference as mpSendInterference,
+  sendChat as mpSendChat,
+  sendScoreUpdate as mpSendScoreUpdate,
+  sendGameOver as mpSendGameOver,
+  setMultiplayerHandler,
+  isMultiplayerConnected,
+  type MultiplayerEvent,
+} from '../multiplayer/client';
 import { setMultiplayerCallback } from '../game/engine';
 import { startBot, type BotInstance } from '../game/bot';
 import { getElo, updateEloFromMatch } from '../game/elo';
@@ -36,6 +44,11 @@ export default function GameScreen({ onGameOver, seedOverride, mode }: Props) {
   const [oppScore, setOppScore] = useState(0);
   const [duel, setDuel] = useState({ p1: 0, p2: 0 });
   const [laserArmedUI, setLaserArmedUI] = useState(false);
+  const [chatMessages, setChatMessages] = useState<Array<{ from: 'me' | 'them'; text: string; ts: number }>>([]);
+  const [chatInput, setChatInput] = useState('');
+  const [chatOpen, setChatOpen] = useState(false);
+  const [unreadChat, setUnreadChat] = useState(0);
+  const chatListRef = useRef<HTMLDivElement>(null);
   const costs = getPowerCosts();
 
   const isOnline = mode === 'online';
@@ -59,12 +72,27 @@ export default function GameScreen({ onGameOver, seedOverride, mode }: Props) {
     return () => { bot.stop(); botRef.current = null; };
   }, [isAI]);
 
-  // Online opponent score polling
+  // Online: subscribe to multiplayer events for opponent score, interference, chat, gameOver.
   useEffect(() => {
     if (!isOnline) return;
-    const id = setInterval(() => setOppScore(getOpponentScore()), 250);
-    return () => clearInterval(id);
-  }, [isOnline]);
+    setMultiplayerHandler((event: MultiplayerEvent) => {
+      if (event.type === 'opponentScore') {
+        setOpponentScore(event.score);
+        setOppScore(event.score);
+      } else if (event.type === 'chat') {
+        setChatMessages(prev => [...prev.slice(-29), { from: 'them', text: event.text, ts: event.ts }]);
+        setUnreadChat(u => (chatOpen ? 0 : u + 1));
+      } else if (event.type === 'opponentGameOver') {
+        // Opponent quit or finished → end our game now too
+        forceGameOver();
+      }
+    });
+  }, [isOnline, chatOpen]);
+
+  // Auto-scroll chat to bottom on new message
+  useEffect(() => {
+    if (chatListRef.current) chatListRef.current.scrollTop = chatListRef.current.scrollHeight;
+  }, [chatMessages, chatOpen]);
 
   // Track laser armed state for UI feedback
   useEffect(() => {
@@ -107,7 +135,9 @@ export default function GameScreen({ onGameOver, seedOverride, mode }: Props) {
         }
         onGameOver(stats);
       },
-      onScoreUpdate: () => {},
+      onScoreUpdate: (score, level) => {
+        if (isOnline) mpSendScoreUpdate(score, level);
+      },
       onGaugeUpdate: (g, m) => { setGauge(g); setGaugeMax(m); },
     });
 
@@ -127,6 +157,30 @@ export default function GameScreen({ onGameOver, seedOverride, mode }: Props) {
   const canCastWild = gauge >= costs.wildcard;
   const canCastBarrage = gauge >= costs.barrage && isOnline;
   const canCastLaser = gauge >= costs.laser && !laserArmedUI;
+
+  const handleSendChat = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const text = chatInput.trim();
+    if (!text) return;
+    if (!isMultiplayerConnected()) return;
+    mpSendChat(text);
+    setChatMessages(prev => [...prev.slice(-29), { from: 'me', text, ts: Date.now() }]);
+    setChatInput('');
+  };
+
+  const toggleChat = () => {
+    setChatOpen(o => {
+      if (!o) setUnreadChat(0);
+      return !o;
+    });
+  };
+
+  const handleQuit = () => {
+    // eslint-disable-next-line no-alert
+    if (!window.confirm(t('quitConfirm'))) return;
+    if (isOnline) mpSendGameOver(0);
+    forceGameOver();
+  };
 
   return (
     <div className="screen active" id="game-screen">
@@ -164,6 +218,48 @@ export default function GameScreen({ onGameOver, seedOverride, mode }: Props) {
 
           <canvas id="game-canvas"></canvas>
 
+          <button className="quit-btn" onClick={handleQuit} title={t('quit')} aria-label={t('quit')}>
+            ✕
+          </button>
+
+          {isOnline && (
+            <>
+              <button
+                className={`chat-toggle ${unreadChat > 0 ? 'has-unread' : ''}`}
+                onClick={toggleChat}
+                aria-label="Chat"
+              >
+                💬{unreadChat > 0 ? <span className="chat-unread">{unreadChat}</span> : null}
+              </button>
+
+              {chatOpen && (
+                <div className="chat-panel">
+                  <div className="chat-header">
+                    <span>{t('vs')}</span>
+                    <button className="chat-close" onClick={toggleChat}>×</button>
+                  </div>
+                  <div className="chat-list" ref={chatListRef}>
+                    {chatMessages.length === 0 && <div className="chat-empty">…</div>}
+                    {chatMessages.map((m, i) => (
+                      <div key={i} className={`chat-msg ${m.from}`}>{m.text}</div>
+                    ))}
+                  </div>
+                  <form className="chat-input-row" onSubmit={handleSendChat}>
+                    <input
+                      type="text"
+                      maxLength={200}
+                      value={chatInput}
+                      onChange={e => setChatInput(e.target.value)}
+                      placeholder="…"
+                      autoComplete="off"
+                    />
+                    <button type="submit" disabled={!chatInput.trim()}>↑</button>
+                  </form>
+                </div>
+              )}
+            </>
+          )}
+
           <div id="gauge-bar">
             <div className="gauge-track">
               <div className="gauge-fill" style={{ width: `${gaugePct}%` }} />
@@ -182,9 +278,9 @@ export default function GameScreen({ onGameOver, seedOverride, mode }: Props) {
                 className={`power-btn ${canCastLaser ? 'ready' : ''} ${laserArmedUI ? 'armed' : ''}`}
                 disabled={!canCastLaser}
                 onClick={() => castLaser()}
-                title={`Laser slash (${costs.laser})`}
+                title={`${t('pawSlash')} (${costs.laser})`}
               >
-                ⚡ <span className="power-cost">{costs.laser}</span>
+                🐾 <span className="power-cost">{costs.laser}</span>
               </button>
               <button
                 className={`power-btn ${canCastBarrage ? 'ready' : ''}`}

@@ -14,7 +14,7 @@ export default function LangScreen({ onPick }: Props) {
     <div className="screen active" id="lang-screen">
       <div className="menu-content">
         <img src="/assets/logo.png" alt="BH Studios" className="menu-logo" />
-        <h1 className="menu-title" style={{ fontSize: '2.6rem' }}>WARDOGS</h1>
+        <h1 className="menu-title" style={{ fontSize: '2.6rem' }}>WORD DOGS</h1>
         <p className="menu-subtitle">Language / Langue</p>
         <div className="lang-pick-grid">
           {Object.values(LANGUAGES).map(l => (

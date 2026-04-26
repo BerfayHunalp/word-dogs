@@ -434,7 +434,7 @@ export function castLaser(): boolean {
   gauge -= POWER_COST_LASER;
   notifyGauge();
   armLaser((start, end) => fireLaser(start, end));
-  addFloatingText(W / 2, H * 0.18, 'LASER!', '#ff5577', 22);
+  addFloatingText(W / 2, H * 0.18, 'PAW SLASH!', '#ff5577', 22);
   return true;
 }
 
@@ -465,7 +465,7 @@ function fireLaser(start: { x: number; y: number }, end: { x: number; y: number 
   if (hits.length > 0) {
     popBalls(hits);
     addFloatingText((start.x + end.x) / 2, (start.y + end.y) / 2 - 20,
-      `LASER x${hits.length}`, '#ff5577', 22);
+      `PAW x${hits.length}`, '#ff5577', 22);
   }
 
   // Replay frame for the laser shot
@@ -702,6 +702,12 @@ function triggerGameOver() {
   if (onGameOverCb) onGameOverCb({ score, highScore: Math.max(score, hs), wordsFound, bestWord: bestWord.word || '-', combo: comboCount, maxCombo });
 }
 
+// Public: force a game-over right now (used by Quit button and opponent quit).
+export function forceGameOver() {
+  if (!gameActive) return;
+  triggerGameOver();
+}
+
 // ===================== RENDERING =====================
 // "It's like Christmas!" — Claptrap
 
@@ -715,16 +721,23 @@ function render() {
 function drawLaserPreview() {
   const line = getLaserLine();
   if (!line) return;
+  // Draw three parallel claw streaks to evoke a paw swipe.
+  const dx = line.end.x - line.start.x;
+  const dy = line.end.y - line.start.y;
+  const len = Math.hypot(dx, dy) || 1;
+  const nx = -dy / len, ny = dx / len; // unit normal
   ctx!.save();
-  ctx!.shadowColor = '#ff5577';
-  ctx!.shadowBlur = 16;
-  ctx!.strokeStyle = '#ff5577';
-  ctx!.lineWidth = 4;
+  ctx!.shadowColor = '#ff7755';
+  ctx!.shadowBlur = 14;
   ctx!.lineCap = 'round';
-  ctx!.beginPath();
-  ctx!.moveTo(line.start.x, line.start.y);
-  ctx!.lineTo(line.end.x, line.end.y);
-  ctx!.stroke();
+  for (const offset of [-10, 0, 10]) {
+    ctx!.strokeStyle = offset === 0 ? '#ff5577' : 'rgba(255,119,85,0.7)';
+    ctx!.lineWidth = offset === 0 ? 4 : 3;
+    ctx!.beginPath();
+    ctx!.moveTo(line.start.x + nx * offset, line.start.y + ny * offset);
+    ctx!.lineTo(line.end.x + nx * offset, line.end.y + ny * offset);
+    ctx!.stroke();
+  }
   ctx!.restore();
 }
 

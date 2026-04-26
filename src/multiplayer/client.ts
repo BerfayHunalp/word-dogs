@@ -11,6 +11,7 @@ export type MultiplayerEvent =
   | { type: 'opponentScore'; score: number; level: number }
   | { type: 'interference'; effect: InterferenceEffect }
   | { type: 'opponentGameOver' }
+  | { type: 'chat'; text: string; from: string; ts: number }
   | { type: 'disconnected' }
   | { type: 'error'; message: string };
 
@@ -76,6 +77,21 @@ export function sendGameOver(finalScore: number) {
   send({ type: 'gameOver', finalScore });
 }
 
+// Send a chat message to the matched opponent
+export function sendChat(text: string) {
+  const trimmed = text.trim().slice(0, 200);
+  if (!trimmed) return;
+  send({ type: 'chat', text: trimmed });
+}
+
+// Replace the active event handler. Used when ownership of the WebSocket moves
+// from the lobby screen to the in-game screen so chat keeps flowing.
+export function setMultiplayerHandler(fn: EventHandler) { handler = fn; }
+
+export function isMultiplayerConnected(): boolean {
+  return ws?.readyState === WebSocket.OPEN;
+}
+
 function send(data: unknown) {
   if (ws?.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify(data));
@@ -114,6 +130,15 @@ function handleMessage(msg: Record<string, unknown>) {
 
     case 'opponentGameOver':
       handler?.({ type: 'opponentGameOver' });
+      break;
+
+    case 'chat':
+      handler?.({
+        type: 'chat',
+        text: (msg.text as string) || '',
+        from: (msg.from as string) || '?',
+        ts: (msg.ts as number) || Date.now(),
+      });
       break;
 
     default:

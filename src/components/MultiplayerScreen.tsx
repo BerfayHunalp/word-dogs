@@ -3,10 +3,10 @@
 // "Stairs?! NOOOOOOO!" — Claptrap (but ranked ladders go UP)
 // ============================================================
 
-import { useState, useEffect } from 'react';
-import { connectMultiplayer, disconnectMultiplayer, getMultiplayerState } from '../multiplayer/client';
+import { useState, useEffect, useRef } from 'react';
+import { connectMultiplayer, disconnectMultiplayer } from '../multiplayer/client';
 import { getToken } from '../api/client';
-import { t } from '../i18n';
+import { t, getLangConfig } from '../i18n';
 import type { MultiplayerEvent } from '../multiplayer/client';
 
 interface Props {
@@ -19,9 +19,15 @@ export default function MultiplayerScreen({ onGameStart, onBack }: Props) {
   const [opponent, setOpponent] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [seed, setSeed] = useState(0);
+  const matchedRef = useRef(false);
+  const lang = getLangConfig();
 
+  // Disconnect only if we leave WITHOUT having matched. After a match the
+  // socket ownership transfers to GameScreen so chat & state keep flowing.
   useEffect(() => {
-    return () => { disconnectMultiplayer(); };
+    return () => {
+      if (!matchedRef.current) disconnectMultiplayer();
+    };
   }, []);
 
   const handleFind = () => {
@@ -33,7 +39,7 @@ export default function MultiplayerScreen({ onGameStart, onBack }: Props) {
           setStatus('found');
           setOpponent(event.opponentName);
           setSeed(event.seed);
-          // Auto-start after brief delay
+          matchedRef.current = true;
           setTimeout(() => onGameStart(event.seed), 2000);
           break;
         case 'error':
@@ -52,16 +58,26 @@ export default function MultiplayerScreen({ onGameStart, onBack }: Props) {
     setStatus('idle');
   };
 
+  const handleBack = () => {
+    disconnectMultiplayer();
+    onBack();
+  };
+
   return (
     <div className="screen active" id="multiplayer-screen">
       <div className="multiplayer-content">
         <h1 className="menu-title" style={{ fontSize: '2.5rem' }}>{t('multiplayer')}</h1>
 
+        <div className="mp-lang-badge">
+          <span className="score-label">{t('language')}</span>
+          <span className="mp-lang-value">{lang.name}</span>
+        </div>
+
         {status === 'idle' && (
           <>
             <p className="menu-subtitle">1 vs 1 — {t('subtitle')}</p>
             <button className="btn-primary" onClick={handleFind}>{t('findMatch')}</button>
-            <button className="btn-secondary" onClick={onBack}>{t('back')}</button>
+            <button className="btn-secondary" onClick={handleBack}>{t('back')}</button>
           </>
         )}
 
@@ -87,7 +103,7 @@ export default function MultiplayerScreen({ onGameStart, onBack }: Props) {
           <>
             <p className="auth-error">{errorMsg}</p>
             <button className="btn-primary" onClick={handleFind}>{t('retry')}</button>
-            <button className="btn-secondary" onClick={onBack}>{t('back')}</button>
+            <button className="btn-secondary" onClick={handleBack}>{t('back')}</button>
           </>
         )}
       </div>
