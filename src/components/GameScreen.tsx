@@ -34,9 +34,10 @@ interface Props {
   onGameOver: (stats: GameStats) => void;
   seedOverride?: number;
   mode: GameMode;
+  aiName?: string;
 }
 
-export default function GameScreen({ onGameOver, seedOverride, mode }: Props) {
+export default function GameScreen({ onGameOver, seedOverride, mode, aiName }: Props) {
   const started = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const [gauge, setGauge] = useState(0);
@@ -207,7 +208,7 @@ export default function GameScreen({ onGameOver, seedOverride, mode }: Props) {
               </div>
               <div className="score-right">
                 <span className="score-label">
-                  {isOnline ? t('vs') : isAI ? t('aiLabel') : t('level')}
+                  {isOnline ? t('vs') : isAI ? (aiName || t('aiLabel')) : t('level')}
                 </span>
                 {showOpponent
                   ? <span>{oppScore}</span>

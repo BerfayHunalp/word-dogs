@@ -19,8 +19,6 @@ describe('MenuScreen', () => {
     onLogout: vi.fn(),
     lang: 'fr',
     onLangChange: vi.fn(),
-    difficulty: 'normal' as const,
-    onDifficultyChange: vi.fn(),
   };
 
   beforeEach(() => {
@@ -44,10 +42,10 @@ describe('MenuScreen', () => {
     expect(onModeSelect).toHaveBeenCalledWith('solo');
   });
 
-  it('renders all four mode buttons', () => {
+  it('renders the three remaining mode buttons (no VS AI)', () => {
     render(<MenuScreen {...defaultProps} />);
     expect(screen.getByText('SOLO')).toBeInTheDocument();
-    expect(screen.getByText('CONTRE IA')).toBeInTheDocument();
+    expect(screen.queryByText('CONTRE IA')).not.toBeInTheDocument();
     expect(screen.getByText('DUEL LOCAL')).toBeInTheDocument();
     expect(screen.getByText('EN LIGNE')).toBeInTheDocument();
   });
@@ -72,18 +70,10 @@ describe('MenuScreen', () => {
     expect(onLangChange).toHaveBeenCalledWith('en');
   });
 
-  it('renders difficulty picker', () => {
+  it('does not render the difficulty picker', () => {
     render(<MenuScreen {...defaultProps} />);
-    expect(screen.getByText('Facile')).toBeInTheDocument();
-    expect(screen.getByText('Normal')).toBeInTheDocument();
-    expect(screen.getByText('Difficile')).toBeInTheDocument();
-  });
-
-  it('calls onDifficultyChange when difficulty button clicked', () => {
-    const onDifficultyChange = vi.fn();
-    render(<MenuScreen {...defaultProps} onDifficultyChange={onDifficultyChange} />);
-    fireEvent.click(screen.getByText('Difficile'));
-    expect(onDifficultyChange).toHaveBeenCalledWith('hard');
+    expect(screen.queryByText('Facile')).not.toBeInTheDocument();
+    expect(screen.queryByText('Difficile')).not.toBeInTheDocument();
   });
 
   it('displays high score', () => {

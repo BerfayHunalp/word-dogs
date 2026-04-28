@@ -8,12 +8,16 @@ import { connectMultiplayer, disconnectMultiplayer } from '../multiplayer/client
 import { getToken } from '../api/client';
 import { loadDictionary } from '../game/dictionary';
 import { t, getLang, setLang, LANGUAGES } from '../i18n';
+import { generateFakeOpponentName } from '../multiplayer/fakeName';
 import type { MultiplayerEvent } from '../multiplayer/client';
+import type { GameMode } from '../App';
 
 interface Props {
-  onGameStart: (seed: number) => void;
+  onGameStart: (seed: number, mode: GameMode, opponentName?: string) => void;
   onBack: () => void;
 }
+
+const MATCH_TIMEOUT_MS = 10000;
 
 export default function MultiplayerScreen({ onGameStart, onBack }: Props) {
   const [status, setStatus] = useState<'idle' | 'searching' | 'found' | 'error'>('idle');
@@ -22,6 +26,7 @@ export default function MultiplayerScreen({ onGameStart, onBack }: Props) {
   const [seed, setSeed] = useState(0);
   const [, forceTick] = useState(0);
   const matchedRef = useRef(false);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const currentLang = getLang();
 
   const handleLangChange = (code: string) => {
@@ -31,43 +36,78 @@ export default function MultiplayerScreen({ onGameStart, onBack }: Props) {
     forceTick(n => n + 1);
   };
 
+  const clearTimer = () => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+  };
+
   // Disconnect only if we leave WITHOUT having matched. After a match the
   // socket ownership transfers to GameScreen so chat & state keep flowing.
   useEffect(() => {
     return () => {
+      clearTimer();
       if (!matchedRef.current) disconnectMultiplayer();
     };
   }, []);
 
+  const startAiFallback = () => {
+    if (matchedRef.current) return;
+    matchedRef.current = true;
+    disconnectMultiplayer();
+    const name = generateFakeOpponentName(getLang());
+    const fakeSeed = Math.floor(Math.random() * 2 ** 31);
+    setStatus('found');
+    setOpponent(name);
+    setSeed(fakeSeed);
+    setTimeout(() => onGameStart(fakeSeed, 'ai', name), 2000);
+  };
+
   const handleFind = () => {
     setStatus('searching');
     setErrorMsg('');
+    matchedRef.current = false;
+    clearTimer();
+    timeoutRef.current = setTimeout(startAiFallback, MATCH_TIMEOUT_MS);
+
     connectMultiplayer((event: MultiplayerEvent) => {
       switch (event.type) {
         case 'matched':
+          if (matchedRef.current) return;
+          clearTimer();
+          matchedRef.current = true;
           setStatus('found');
           setOpponent(event.opponentName);
           setSeed(event.seed);
-          matchedRef.current = true;
-          setTimeout(() => onGameStart(event.seed), 2000);
+          setTimeout(() => onGameStart(event.seed, 'online'), 2000);
           break;
         case 'error':
-          setStatus('error');
-          setErrorMsg(event.message);
+          if (matchedRef.current) return;
+          clearTimer();
+          // WS failure → fall through to AI fallback so the player still gets a game.
+          startAiFallback();
           break;
         case 'disconnected':
-          if (status === 'searching') { setStatus('error'); setErrorMsg('Disconnected'); }
+          if (matchedRef.current) return;
+          if (status === 'searching') {
+            clearTimer();
+            startAiFallback();
+          }
           break;
       }
     }, getToken() || undefined);
   };
 
   const handleCancel = () => {
+    clearTimer();
+    matchedRef.current = false;
     disconnectMultiplayer();
     setStatus('idle');
   };
 
   const handleBack = () => {
+    clearTimer();
     disconnectMultiplayer();
     onBack();
   };

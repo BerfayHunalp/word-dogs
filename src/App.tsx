@@ -15,17 +15,16 @@ import { loadDictionary } from './game/dictionary';
 import { loadSession, isLoggedIn } from './api/client';
 import { getLang, setLang } from './i18n';
 import { setDifficulty } from './game/engine';
-import type { GameStats, Difficulty } from './game/types';
+import { difficultyFromElo } from './game/elo';
+import type { GameStats } from './game/types';
 
 type Screen = 'splash' | 'lang' | 'auth' | 'menu' | 'game' | 'gameover' | 'profile' | 'multiplayer';
 export type GameMode = 'solo' | 'ai' | 'localDuel' | 'online';
 
 const LANG_PICKED_KEY = 'wardogs_lang_picked';
-const DIFFICULTY_KEY = 'wardogs_difficulty';
 
-function loadDifficulty(): Difficulty {
-  const saved = localStorage.getItem(DIFFICULTY_KEY) as Difficulty | null;
-  return saved && ['easy', 'normal', 'hard'].includes(saved) ? saved : 'normal';
+function syncDifficultyFromElo() {
+  setDifficulty(difficultyFromElo());
 }
 
 export default function App() {
@@ -34,14 +33,12 @@ export default function App() {
   const [lang, setLangState] = useState(getLang());
   const [mode, setMode] = useState<GameMode>('solo');
   const [seed, setSeed] = useState<number | undefined>();
-  const [difficulty, setDifficultyState] = useState<Difficulty>(loadDifficulty());
-
-  // Apply difficulty to engine on mount + on change
-  useEffect(() => { setDifficulty(difficulty); }, [difficulty]);
+  const [aiName, setAiName] = useState<string | undefined>();
 
   // Boot sequence
   useEffect(() => {
     loadSession();
+    syncDifficultyFromElo();
     Promise.all([
       loadDictionary(),
       new Promise(r => setTimeout(r, 3000)),
@@ -67,21 +64,18 @@ export default function App() {
     loadDictionary();
   }, []);
 
-  const changeDifficulty = useCallback((d: Difficulty) => {
-    setDifficultyState(d);
-    setDifficulty(d);
-    localStorage.setItem(DIFFICULTY_KEY, d);
-  }, []);
-
   const handleGameOver = useCallback((stats: GameStats) => {
     setGameStats(stats);
     setSeed(undefined);
+    // Re-sync difficulty: AI matches just updated Elo.
+    syncDifficultyFromElo();
     setScreen('gameover');
   }, []);
 
-  const startGame = useCallback((m: GameMode, s?: number) => {
+  const startGame = useCallback((m: GameMode, s?: number, opponentName?: string) => {
     setMode(m);
     setSeed(s);
+    setAiName(opponentName);
     setScreen('game');
   }, []);
 
@@ -100,24 +94,22 @@ export default function App() {
           onLogout={() => setScreen('auth')}
           lang={lang}
           onLangChange={changeLang}
-          difficulty={difficulty}
-          onDifficultyChange={changeDifficulty}
         />
       )}
       {screen === 'profile' && <ProfileScreen onBack={() => setScreen('menu')} />}
       {screen === 'game' && (
-        <GameScreen onGameOver={handleGameOver} seedOverride={seed} mode={mode} />
+        <GameScreen onGameOver={handleGameOver} seedOverride={seed} mode={mode} aiName={aiName} />
       )}
       {screen === 'gameover' && (
         <GameOverScreen
           stats={gameStats!}
-          onRetry={() => startGame(mode)}
+          onRetry={() => startGame(mode, undefined, aiName)}
           onMenu={() => setScreen('menu')}
         />
       )}
       {screen === 'multiplayer' && (
         <MultiplayerScreen
-          onGameStart={(s) => startGame('online', s)}
+          onGameStart={(s, m, name) => startGame(m, s, name)}
           onBack={() => setScreen('menu')}
         />
       )}

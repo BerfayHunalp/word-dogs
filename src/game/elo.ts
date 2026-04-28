@@ -3,6 +3,8 @@
 // Rating is never shown in the UI; it only steers AI difficulty.
 // ============================================================
 
+import type { Difficulty } from './types';
+
 const KEY = 'wardogs_elo';
 const DEFAULT_ELO = 1000;
 const MIN_ELO = 400;
@@ -31,6 +33,14 @@ function expected(playerElo: number, oppElo: number): number {
 
 // Convert a head-to-head match result (player vs bot scores) into Elo delta.
 // If scores tie, count as a 0.5 actual.
+// Map current Elo → Difficulty bucket. Default Elo (1000) lands in 'normal'.
+export function difficultyFromElo(elo: number = getElo()): Difficulty {
+  if (elo < 700) return 'egoFriendly';
+  if (elo < 1000) return 'easy';
+  if (elo < 1400) return 'normal';
+  return 'hard';
+}
+
 export function updateEloFromMatch(playerScore: number, botScore: number, botElo: number): { before: number; after: number; delta: number } {
   const before = getElo();
   const total = playerScore + botScore;
